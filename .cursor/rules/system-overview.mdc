@@ -1,0 +1,233 @@
+---
+description: This rule is description overview system
+globs: 
+alwaysApply: false
+---
+# Hệ thống Quản lý Nội bộ (Internal Management System)
+
+**Tài liệu:** Phân tích và Đề xuất Giải pháp
+
+## I. Bối cảnh và Vấn đề
+
+Teams SD đang đối mặt với một số thách thức trong quản lý và vận hành khi bước vào giai đoạn phát triển mới (từ năm 2025) với cơ cấu tổ chức theo "課" và người phụ trách riêng. Các vấn đề chính bao gồm:
+
+1.  **Giao tiếp và Phân cấp:**
+    *   Nhân sự có xu hướng trao đổi trực tiếp với 課長 (do thói quen cũ), bỏ qua 部長.
+    *   Giao tiếp giữa 課長 và 部長 còn hạn chế, ảnh hưởng đến sự suôn sẻ trong luồng thông tin nội bộ.
+2.  **Vai trò 部長:**
+    *   部長 gặp khó khăn trong việc thực hiện nhiệm vụ presales cùng Sales do hạn chế về cách làm việc và khả năng ngoại ngữ (Tiếng Nhật).
+3.  **Phối hợp Sales - Kỹ thuật:**
+    *   Team Sales chưa chủ động chia sẻ cơ hội và yêu cầu sự tham gia của 部長 một cách hệ thống.
+4.  **Quản lý và Theo dõi:**
+    *   Việc tracking KPI (doanh thu Sales, margin bộ phận) chưa hiệu quả.
+    *   Thiếu công cụ (tool) để quản lý tập trung các thông tin quan trọng:
+        *   Thông tin nhân sự (kỹ năng, kinh nghiệm, tình trạng sẵn sàng cho dự án).
+        *   Quản lý và chia sẻ cơ hội kinh doanh.
+        *   Thông tin đánh giá nhân sự và tiêu chí tuyển dụng.
+        *   Hệ thống quản lý đào tạo.
+
+## II. Mục tiêu Giải quyết
+
+1.  **Xây dựng hệ thống tool quản lý tập trung:** Giải quyết các thiếu sót về công cụ quản lý thông tin nhân sự, margin, cơ hội, hợp đồng và KPI.
+2.  **Xây dựng cơ chế trao quyền và chia sẻ cơ hội:** Định nghĩa lại quy trình làm việc, đặc biệt là sự phối hợp giữa Sales và 部長, thông qua việc sử dụng tool làm nền tảng.
+3.  **Tăng cường mối quan hệ Leader - Nhân viên:** Hỗ trợ việc trao đổi và đánh giá thường xuyên hơn thông qua các chức năng của tool.
+
+## III. Đề xuất Chi tiết Chức năng Tool Quản lý
+
+Hệ thống tool quản lý cần được xây dựng theo dạng module hóa để dễ dàng phát triển, bảo trì và mở rộng. Dưới đây là các module và chức năng chi tiết:
+
+### Module 1: Quản lý Nhân sự (Human Resource Management - HRM)
+
+**Mục tiêu:** Cung cấp cái nhìn tổng quan và chi tiết về nguồn lực của bộ phận.
+
+*   **1.1. Hồ sơ Nhân sự:**
+    *   **Dữ liệu:**
+        *   Thông tin cơ bản: Họ tên, Mã NV, Ngày sinh, Email công ty, Account nội bộ (nếu có), Ngày vào công ty, Địa chỉ, Số điện thoại, Thông tin liên hệ khẩn cấp.
+        *   Thông tin tổ chức: Vị trí công việc (Developer, Tester, BA, Leader...), Team phụ trách, Leader trực tiếp quản lý.
+    *   **Chức năng:**
+        *   <mark>CRUD (Thêm, Xem, Sửa, Xóa - logic) thông tin nhân sự.</mark>
+        *   <mark>Phân quyền truy cập (ví dụ: Nhân viên tự xem/sửa thông tin cơ bản, Leader xem/sửa thông tin team, 課長/Admin quản lý toàn bộ).</mark>
+        *   <mark>Tìm kiếm, lọc nhân sự theo tên, mã NV, team, vị trí, trạng thái...</mark>
+        *   <mark>Import/Export danh sách nhân sự. (?)</mark>
+
+*   **1.2. Quản lý Skills & Kinh nghiệm:**
+    *   **Dữ liệu:**
+        *   Danh mục Skills (có thể cấu hình bởi Admin/Leader):
+            *   Ngôn ngữ lập trình (VD: Java, Python, COBOL, C#...)
+            *   Framework (VD: Spring Boot, React, Angular, .NET...)
+            *   Database (VD: MySQL, PostgreSQL, Oracle...)
+            *   Nghiệp vụ (VD: Tài chính - Ngân hàng, Bảo hiểm, Logistics...)
+            *   Ngoại ngữ (VD: Tiếng Nhật N1/N2/N3, Tiếng Anh TOEIC...)
+            *   Chứng chỉ (VD: AWS Certified Developer, PMP...)
+        *   Với mỗi skill: Số năm kinh nghiệm, Cấp độ tự đánh giá (VD: Basic, Intermediate, Advanced), Cấp độ Leader đánh giá (optional).
+
+    *   **Chức năng:**
+        *   <mark> Nhân viên tự cập nhật profile skill của mình.</mark>
+        *   <mark> Leader xem, đánh giá (optional) skill của thành viên trong team.</mark>
+        *   <mark>Tìm kiếm nhân sự theo tổ hợp skills, số năm kinh nghiệm, cấp độ (VD: Tìm Dev Java > 3 năm KN AND biết Spring Boot). *(***)*</mark>
+        *   <mark> Gợi ý nhân sự phù hợp cho dự án/cơ hội dựa trên yêu cầu skill. *(***)*</mark>
+
+*   **1.3. Quản lý Trạng thái & Phân bổ Dự án:**
+    *   **Dữ liệu:**
+        *   Trạng thái hiện tại:
+            *   `Allocated`: Đang tham gia dự án (ghi rõ tên dự án, % phân bổ).
+            *   `Available` / `Bench`: Sẵn sàng cho dự án mới.
+            *   `Ending Soon`: Sắp kết thúc dự án (ghi rõ ngày dự kiến kết thúc, dự án sắp kết thúc).
+            *   `On Leave`: Đang nghỉ phép dài hạn.
+            *   `Resigned`: Đã nghỉ việc.
+        *   Lịch sử tham gia dự án: Tên dự án, Khách hàng, Vai trò, Thời gian bắt đầu/kết thúc.
+    *   **Chức năng:**
+        *   <mark>Leader/Quản lý cập nhật trạng thái và phân bổ dự án cho nhân sự.</mark>
+        *   <mark>Xem nhanh danh sách nhân sự đang `Bench` hoặc `Ending Soon`.</mark>
+        *   <mark>Xem lịch sử dự án của từng nhân viên.</mark>
+        *   <mark>Báo cáo tỷ lệ sử dụng nguồn lực (Utilization Rate) theo team/bộ phận.</mark>
+        *   <mark>Cảnh báo khi có nhân sự sắp hết dự án.</mark>
+
+### Module 2: Quản lý Hiệu suất & Margin (Performance & Margin Management)
+
+**Mục tiêu:** Theo dõi hiệu quả tài chính của từng nhân sự và của bộ phận. **Phân quyền chặt chẽ: Chỉ Leader và 課長 truy cập.**
+
+*   **2.1. Quản lý Chi phí & Doanh thu Nhân sự:**
+    *   **Dữ liệu:**
+        *   Chi phí nhân sự (Cost): Lương cơ bản, BHXH, Thưởng, Phụ cấp... (Có thể nhập liệu, import từ file, hoặc tích hợp với hệ thống lương nếu có). Dữ liệu lưu theo tháng.
+        *   Doanh thu nhân sự (Revenue): Doanh thu dự kiến/thực tế mà nhân sự mang lại từ các dự án đang tham gia, tính toán dựa trên đơn giá bán (billing rate) và tỷ lệ phân bổ (% allocation). Dữ liệu lưu theo tháng.
+    *   **Chức năng:**
+        *   <mark>Nhập/Import dữ liệu chi phí định kỳ.</mark>
+        *   <mark>Tự động tính toán doanh thu dựa trên thông tin dự án và phân bổ nhân sự (từ Module 1 và Module 4).</mark>
+        *   <mark>Tính toán Margin: `Margin = ((Revenue - Cost) / Revenue) * 100%`.</mark>
+        *   <mark>Xem chi tiết cost, revenue, margin của từng nhân sự theo tháng, quý, năm.</mark>
+        *   <mark>Tổng hợp margin theo team, theo bộ phận.</mark>
+
+*   **2.2. Cảnh báo Trạng thái Margin:**
+    *   **Dữ liệu:**
+        *   Ngưỡng Margin (có thể cấu hình):
+            *   `Red`: Margin <= 25%
+            *   `Yellow`: 25% < Margin <= 35%
+            *   `Green`: Margin > 35%
+    *   **Chức năng:**
+        *   <mark>Tự động hiển thị màu sắc cảnh báo (Red/Yellow/Green) bên cạnh tên nhân sự hoặc trong các báo cáo margin.</mark>
+        *   <mark>Lọc/sắp xếp nhân sự theo trạng thái margin.</mark>
+        *   <mark>(Optional) Gửi thông báo tự động cho Leader/課長 khi có nhân sự rơi vào vùng `Red` hoặc `Yellow` kéo dài.</mark>
+
+### Module 3: Quản lý Cơ hội Kinh doanh (Opportunity Management)
+
+**Mục tiêu:** Tập trung hóa việc theo dõi cơ hội, tăng cường phối hợp giữa Sales và 部長.
+
+*   **3.1. Đồng bộ hóa Cơ hội từ Hubspot:**
+    *   **Dữ liệu:** Các thông tin cơ bản của cơ hội từ Hubspot (Tên cơ hội, Khách hàng, Giá trị ước tính, Giai đoạn bán hàng - Deal Stage, Ngày tạo, Ngày cập nhật cuối, Người phụ trách Sales...). Trạng thái đồng bộ (Success/Failed).
+    *   **Chức năng:**
+        *   <mark>Thiết lập kết nối (API/ FTP,..) với Hubspot</mark>
+        *   <mark>Lập lịch (schedule job) để tự động đồng bộ dữ liệu cơ hội từ Hubspot vào tool định kỳ (VD: mỗi giờ, mỗi ngày).</mark>
+        *   <mark>Cho phép kích hoạt đồng bộ thủ công.</mark>
+        *   <mark>Ghi log các lỗi xảy ra trong quá trình đồng bộ.</mark>
+
+*   **3.2. Tracking và Phân công Cơ hội:**
+    *   **Dữ liệu:**
+        *   Người phụ trách trong tool: Sales (đồng bộ từ Hubspot), 部長 được assign.
+        *   Ngày tương tác cuối cùng (Last Interaction Date): Cập nhật tự động khi có ghi chú mới hoặc cập nhật thủ công.
+        *   Lịch sử tương tác/Ghi chú (Notes/Activities): Cho phép Sales/Leader thêm ghi chú về các hoạt động liên quan đến cơ hội (cuộc gọi, email, meeting...).
+        *   Trạng thái Follow-up (tự động tính toán dựa trên `Last Interaction Date`):
+            *   `Red`: > 3 tuần chưa có action (tính từ `Last Interaction Date`).
+            *   `Yellow`: > 1 tuần và <= 3 tuần chưa có action.
+            *   `Green`: <= 1 tuần có action.
+            *   (Ngưỡng thời gian có thể cấu hình).
+        *   Đánh dấu "Ưu tiên Onsite" (Onsite Priority Flag): Checkbox để đánh dấu các cơ hội có yêu cầu/tiềm năng onsite.
+    *   **Chức năng:**
+        *   <mark>Hiển thị danh sách cơ hội với các thông tin chính và trạng thái follow-up (Red/Yellow/Green).</mark>
+        *   <mark>Sales/課長 có thể assign một hoặc nhiều 部長 vào cơ hội để hỗ trợ presales.</mark>
+        *   <mark>Sales và 部長 được assign có thể xem chi tiết cơ hội và thêm ghi chú/lịch sử tương tác.</mark>
+        *   <mark>Tự động cập nhật `Last Interaction Date` khi có ghi chú mới.</mark>
+        *   <mark>Lọc/Tìm kiếm cơ hội theo trạng thái follow-up, người phụ trách (Sales/Leader), khách hàng, ưu tiên onsite, giai đoạn bán hàng...</mark>
+        *   <mark>Thông báo (notification) cho người liên quan khi được assign hoặc khi có cập nhật mới trên cơ hội.</mark>
+
+### Module 4: Quản lý Hợp đồng & Doanh thu (Contract & Revenue Management)
+
+**Mục tiêu:** Theo dõi vòng đời hợp đồng, tình hình thu tiền và đối chiếu với KPI doanh thu.
+
+*   **4.1. Quản lý Thông tin Hợp đồng:**
+    *   **Dữ liệu:**
+        *   Mã HĐ, Tên HĐ/Dự án, Khách hàng.
+        *   Liên kết với Cơ hội (từ Module 3) nếu có.
+        *   Ngày ký, Ngày hiệu lực, Ngày hết hạn (dự kiến).
+        *   Giá trị hợp đồng (tổng giá trị, đơn giá theo man-month/resource...).
+        *   Loại hợp đồng (Fixed Price, T&M...).
+        *   Điều khoản thanh toán (Payment Terms): Các mốc thanh toán, ngày dự kiến thu tiền cho từng đợt.
+        *   Người phụ trách Sales.
+        *   Trạng thái hợp đồng (VD: Mới ký, Đang thực hiện, Tạm dừng, Hoàn thành, Đã hủy...).
+        *   Nhân sự tham gia (liên kết với Module 1).
+    *   **Chức năng:**
+        *   <mark>CRUD thông tin hợp đồng.</mark>
+        *   <mark>Upload/đính kèm file hợp đồng (PDF, Word...).</mark>
+        *   <mark>Liên kết hợp đồng với cơ hội và phân bổ nhân sự.</mark>
+        *   <mark>Tìm kiếm, lọc hợp đồng theo khách hàng, trạng thái, ngày ký...</mark>
+
+*   **4.2. Tracking Thu tiền & Liên kết Kế toán:**
+    *   **Dữ liệu:**
+        *   Với mỗi đợt thanh toán: Trạng thái (Chưa thu, Đã thu, Quá hạn). Ngày thu tiền thực tế. Số tiền thực thu.
+    *   **Chức năng:**
+        *   <mark>Giao diện cho `Sales/課長` cập nhật trạng thái thu tiền và ngày thu tiền thực tế cho từng đợt. (Hoặc) Cho phép import file cập nhật từ Kế toán.</mark>
+        *   <mark>Tự động cảnh báo các khoản thanh toán sắp đến hạn hoặc đã quá hạn.</mark>
+        *   <mark>Báo cáo tình hình công nợ, các khoản đã thu/chưa thu theo khách hàng, theo hợp đồng.</mark>
+        *   <mark>*Quan trọng:* Cần xác định rõ quy trình phối hợp và cách thức cập nhật dữ liệu với `Sales/課長` (API, import file, nhập liệu thủ công).</mark>
+
+*   **4.3. Tracking Doanh thu theo KPI Sales/部:**
+    *   **Dữ liệu:**
+        *   KPI doanh thu (Target Revenue) của từng Sales theo Tháng/Quý/Năm.
+        *   Doanh thu thực tế (Actual Revenue) ghi nhận được từ các hợp đồng đã ký và/hoặc đã thu tiền (tùy theo quy tắc ghi nhận doanh thu của công ty) trong kỳ.
+    *   **Chức năng:**
+        *   <mark>Nhập/Thiết lập KPI doanh thu cho từng Sales・部.</mark> (?)
+        *   <mark>Tự động tổng hợp doanh thu thực tế từ dữ liệu hợp đồng và trạng thái thu tiền (theo quy tắc đã định).</mark>
+        *   <mark>Hiển thị bảng/biểu đồ so sánh Actual Revenue vs Target Revenue cho từng Sales・部.</mark>
+        *   <mark>Báo cáo tổng hợp doanh thu theo Sales, theo thời gian, theo khách hàng.</mark>
+
+### Module 5: Dashboard & Báo cáo (Dashboard & Reporting)
+
+**Mục tiêu:** Cung cấp cái nhìn tổng quan, trực quan về các chỉ số hoạt động quan trọng của bộ phận.
+
+*   **5.1. Dashboard Tổng hợp:**
+    *   **Chức năng:**
+        *   <mark>Hiển thị các widget/biểu đồ chính, có thể tùy chỉnh bởi người dùng (theo quyền).</mark>
+        *   **Cơ hội:**
+            *   <mark>Số lượng cơ hội theo trạng thái follow-up (Red/Yellow/Green).</mark>
+            *   <mark>Phễu bán hàng (Opportunities by Deal Stage).</mark>
+            *   <mark>Top cơ hội theo giá trị ước tính.</mark>
+        *   **Margin:**
+            *   <mark>Biểu đồ tròn phân bổ margin nhân sự (% nhân sự Red/Yellow/Green).</mark>
+            *   <mark>Biểu đồ đường thể hiện xu hướng margin trung bình của bộ phận theo tháng/quý.</mark>
+        *   **Doanh thu & Hợp đồng:**
+            *   <mark>Tổng doanh thu thực tế theo tháng/quý/năm so với KPI.</mark>
+            *   <mark>Số lượng hợp đồng mới ký.</mark>
+            *   <mark>Tình hình công nợ (tổng số tiền phải thu, quá hạn).</mark>
+        *   **Nhân sự:**
+            *   <mark>Số lượng nhân sự theo trạng thái (Allocated, Bench, Ending Soon).</mark>
+            *   <mark>Tỷ lệ sử dụng nguồn lực (Utilization Rate) trung bình.</mark>
+        *   **Bộ lọc:** <mark>Cho phép lọc dữ liệu trên dashboard theo khoảng thời gian (Tháng/Quý/Năm), theo Team.</mark>
+
+*   **5.2. Báo cáo Chi tiết:**
+    *   **Chức năng:**
+        *   <mark>Cung cấp các báo cáo dạng bảng biểu chi tiết cho từng module.</mark>
+        *   <mark>VD: Danh sách nhân sự kèm skill, Báo cáo chi tiết margin từng nhân sự, Danh sách cơ hội kèm trạng thái & ghi chú, Danh sách hợp đồng và tình trạng thanh toán, Báo cáo tiến độ KPI Sales...</mark>
+        *   <mark>Cho phép lọc, sắp xếp dữ liệu trong báo cáo.</mark>
+        *   <mark>Cho phép xuất các báo cáo ra định dạng Excel/CSV để phục vụ phân tích sâu hơn.</mark>
+
+### Module 6: Quản trị Hệ thống (Admin)
+
+**Mục tiêu:** Cấu hình và quản lý các thiết lập chung của hệ thống.
+
+*   **Chức năng:**
+    *   <mark>Quản lý người dùng và phân quyền (Roles & Permissions).</mark>
+    *   <mark>Cấu hình các danh mục (Skills, Trạng thái dự án, Trạng thái hợp đồng...).</mark>
+    *   <mark>Cấu hình ngưỡng cảnh báo (Margin, Follow-up cơ hội...).</mark>
+    *   <mark>Quản lý kết nối API (Hubspot...).</mark>
+    *   <mark>Xem log hệ thống.</mark>
+
+
+## IV. Lợi ích Dự kiến
+
+*   **Tập trung hóa thông tin:** Dữ liệu về nhân sự, dự án, cơ hội, hợp đồng được quản lý tại một nơi duy nhất, dễ dàng truy cập và tra cứu.
+*   **Cải thiện hiệu quả quản lý:** Leader và 課長 có cái nhìn rõ ràng về tình hình nguồn lực, hiệu suất tài chính (margin), tiến độ kinh doanh.
+*   **Tăng cường phối hợp:** Sales và 部長 có công cụ để chia sẻ thông tin và theo dõi cơ hội hiệu quả hơn.
+*   **Minh bạch hóa KPI:** Việc theo dõi KPI doanh thu, margin trở nên dễ dàng và minh bạch hơn.
+*   **Hỗ trợ ra quyết định:** Cung cấp dữ liệu và báo cáo tin cậy để Ban Lãnh đạo đưa ra các quyết định chiến lược kịp thời.
+*   **Nâng cao năng suất:** Giảm thời gian tìm kiếm thông tin thủ công, tự động hóa một số quy trình báo cáo, cảnh báo.
+

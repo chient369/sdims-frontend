@@ -1,0 +1,45 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## Project Structure
+
+```
+src/
+  assets/           # Static assets (images, fonts, etc.)
+  components/       # Shared components
+    ui/             # Base UI components
+    layout/         # Layout components
+    forms/          # Form-related components
+    tables/         # Table-related components
+    modals/         # Modal-related components
+  features/         # Feature-based modules
+    auth/           # Authentication related
+    dashboard/      # Dashboard related
+    hrm/            # Human Resource Management
+    margin/         # Margin Management
+    contracts/      # Contract Management
+    opportunities/  # Opportunity Management
+  hooks/            # Custom hooks
+  context/          # React context definitions
+  services/         # API services
+    core/           # Core service utilities
+      axios.ts      # Axios instance and interceptors
+      baseApi.ts    # Base API service class
+      queryClient.ts# React Query configuration
+      utils.ts      # API utility functions
+    features/       # Domain-specific API services
+      auth/         # Authentication services
+      hrm/          # Human Resource Management services
+      contracts/    # Contract Management services
+      opportunities/# Opportunity Management services
+      margin/       # Margin Management services
+      projects/     # Project Management services
+      customers/    # Customer Management services
+    mock/           # Mock data services
+  utils/            # Utility functions
+  types/            # TypeScript type definitions
+  config/           # Application configuration
+  routes/           # Routing definitions
+```
