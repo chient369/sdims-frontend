@@ -1,21 +1,16 @@
 import React from 'react';
-import { useAuth } from '../../store';
+import { useAuth } from '../../hooks/useAuth';
 
 interface PermissionGuardProps {
   /**
    * Required permission to render the children
    */
-  permission?: string;
+  requiredPermission: string | string[];
   
   /**
-   * Array of permissions where any match will render the children
+   * Require all permissions to render the children
    */
-  anyPermissions?: string[];
-  
-  /**
-   * Array of permissions where all must match to render the children
-   */
-  allPermissions?: string[];
+  requireAll?: boolean;
   
   /**
    * Content to render when permission is granted
@@ -29,33 +24,45 @@ interface PermissionGuardProps {
 }
 
 /**
- * PermissionGuard component - Conditionally renders children based on user permissions
+ * Component that conditionally renders children based on user permissions
+ * @param {PermissionGuardProps} props - Component props
+ * @returns {React.ReactNode} The rendered children if user has permission, otherwise fallback
  */
 const PermissionGuard: React.FC<PermissionGuardProps> = ({
-  permission,
-  anyPermissions,
-  allPermissions,
+  requiredPermission,
+  requireAll = true,
   children,
   fallback = null,
 }) => {
-  const { hasPermission, hasAnyPermission, hasAllPermissions } = useAuth();
+  const { hasPermission, hasPermissions, hasAnyPermission } = useAuth();
   
-  // Check permissions
-  let hasAccess = false;
-  
-  if (permission) {
-    hasAccess = hasPermission(permission);
-  } else if (anyPermissions && anyPermissions.length > 0) {
-    hasAccess = hasAnyPermission(anyPermissions);
-  } else if (allPermissions && allPermissions.length > 0) {
-    hasAccess = hasAllPermissions(allPermissions);
-  } else {
-    // If no permission checks are specified, allow access
-    hasAccess = true;
+  // Check for single permission
+  if (typeof requiredPermission === 'string') {
+    if (!hasPermission(requiredPermission)) {
+      return <>{fallback}</>;
+    }
+  } 
+  // Check for multiple permissions
+  else if (Array.isArray(requiredPermission)) {
+    if (requiredPermission.length === 0) {
+      return <>{children}</>;
+    }
+    
+    // Check if all permissions are required
+    if (requireAll) {
+      if (!hasPermissions(requiredPermission)) {
+        return <>{fallback}</>;
+      }
+    } 
+    // Check if any permission is sufficient
+    else {
+      if (!hasAnyPermission(requiredPermission)) {
+        return <>{fallback}</>;
+      }
+    }
   }
   
-  // Render children or fallback based on permission check
-  return hasAccess ? <>{children}</> : <>{fallback}</>;
+  return <>{children}</>;
 };
 
 export default PermissionGuard; 
