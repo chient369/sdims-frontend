@@ -3,53 +3,88 @@
  * Based on the format: resource:action[:scope]
  */
 
+import { User } from '../features/auth/types';
+
 /**
- * Checks if a user has a specific permission
- * @param requiredPermission The permission to check for
- * @param userPermissions Array of user's permissions
- * @returns boolean
+ * Check if a permission string includes a specific scope
+ * @param permission Permission string in format 'resource:action[:scope]'
+ * @param scope Scope to check for
+ * @returns True if the permission includes the specified scope
  */
-export const hasPermission = (requiredPermission: string, userPermissions: string[]): boolean => {
-  // Handle empty cases
-  if (!requiredPermission || !userPermissions || userPermissions.length === 0) {
+export const hasScope = (permission: string, scope: string): boolean => {
+  const parts = permission.split(':');
+  return parts.length > 2 && parts[2] === scope;
+};
+
+/**
+ * Extract the resource from a permission string
+ * @param permission Permission string in format 'resource:action[:scope]'
+ * @returns The resource part of the permission
+ */
+export const getResource = (permission: string): string => {
+  return permission.split(':')[0];
+};
+
+/**
+ * Extract the action from a permission string
+ * @param permission Permission string in format 'resource:action[:scope]'
+ * @returns The action part of the permission
+ */
+export const getAction = (permission: string): string => {
+  const parts = permission.split(':');
+  return parts.length > 1 ? parts[1] : '';
+};
+
+/**
+ * Extract the scope from a permission string
+ * @param permission Permission string in format 'resource:action[:scope]'
+ * @returns The scope part of the permission or undefined if no scope
+ */
+export const getScope = (permission: string): string | undefined => {
+  const parts = permission.split(':');
+  return parts.length > 2 ? parts[2] : undefined;
+};
+
+/**
+ * Check if a user has a specific permission
+ * @param requiredPermission Permission to check for
+ * @param userPermissions List of user's permissions
+ * @returns True if the user has the required permission
+ */
+export const hasPermission = (
+  requiredPermission: string,
+  userPermissions: string[]
+): boolean => {
+  if (!userPermissions || userPermissions.length === 0) {
     return false;
   }
-
-  // Phân tách quyền thành các phần: resource, action, scope (nếu có)
-  const [resource, action, requiredScope] = requiredPermission.split(':');
   
-  // Kiểm tra quyền chính xác (bao gồm cả scope)
+  // Parse required permission into parts
+  const [resource, action, scope] = requiredPermission.split(':');
+  
+  // Direct match for the exact permission
   if (userPermissions.includes(requiredPermission)) {
     return true;
   }
   
-  // Kiểm tra quyền không có scope
-  if (!requiredScope && userPermissions.includes(`${resource}:${action}`)) {
+  // Check for permission without scope
+  const basicPermission = `${resource}:${action}`;
+  if (!scope && userPermissions.includes(basicPermission)) {
     return true;
   }
   
-  // Nếu cần kiểm tra scope phức tạp hơn (all > team > own > basic > assigned)
-  if (requiredScope) {
-    // Kiểm tra từng quyền của người dùng
-    for (const permission of userPermissions) {
-      const [pResource, pAction, pScope] = permission.split(':');
-      
-      // Nếu resource và action khớp, kiểm tra scope
-      if (pResource === resource && pAction === action && pScope) {
-        // Nếu người dùng có quyền với scope rộng hơn
-        if (requiredScope === 'team' && pScope === 'all') {
-          return true;
-        }
-        if (requiredScope === 'own' && ['all', 'team'].includes(pScope)) {
-          return true;
-        }
-        if (requiredScope === 'basic' && ['all', 'team', 'own'].includes(pScope)) {
-          return true;
-        }
-        if (requiredScope === 'assigned' && ['all'].includes(pScope)) {
-          return true;
-        }
-      }
+  // Check for broader scope permissions
+  if (scope) {
+    // Check scope hierarchy: all > team > own
+    if (scope === 'team' && userPermissions.includes(`${resource}:${action}:all`)) {
+      return true;
+    }
+    
+    if (scope === 'own' && (
+      userPermissions.includes(`${resource}:${action}:all`) ||
+      userPermissions.includes(`${resource}:${action}:team`)
+    )) {
+      return true;
     }
   }
   
@@ -57,53 +92,82 @@ export const hasPermission = (requiredPermission: string, userPermissions: strin
 };
 
 /**
- * Checks if a user has any of the specified permissions
- * @param requiredPermissions Array of permissions to check
- * @param userPermissions Array of user's permissions
- * @returns boolean
+ * Check if a user has all of the required permissions
+ * @param requiredPermissions Permissions to check for
+ * @param userPermissions List of user's permissions
+ * @returns True if the user has all required permissions
  */
-export const hasAnyPermission = (requiredPermissions: string[], userPermissions: string[]): boolean => {
-  return requiredPermissions.some(perm => hasPermission(perm, userPermissions));
+export const hasAllPermissions = (
+  requiredPermissions: string[],
+  userPermissions: string[]
+): boolean => {
+  return requiredPermissions.every(permission => 
+    hasPermission(permission, userPermissions)
+  );
 };
 
 /**
- * Checks if a user has all of the specified permissions
- * @param requiredPermissions Array of permissions to check
- * @param userPermissions Array of user's permissions
- * @returns boolean
+ * Check if a user has any of the required permissions
+ * @param requiredPermissions Permissions to check for
+ * @param userPermissions List of user's permissions
+ * @returns True if the user has at least one of the required permissions
  */
-export const hasAllPermissions = (requiredPermissions: string[], userPermissions: string[]): boolean => {
-  return requiredPermissions.every(perm => hasPermission(perm, userPermissions));
+export const hasAnyPermission = (
+  requiredPermissions: string[],
+  userPermissions: string[]
+): boolean => {
+  return requiredPermissions.some(permission => 
+    hasPermission(permission, userPermissions)
+  );
 };
 
 /**
- * Checks access level for a particular resource based on ownership and team
- * @param resourceOwnerId The owner ID of the resource 
- * @param resourceTeamId The team ID of the resource (if applicable)
- * @param currentUser The current user object
- * @returns 'all' | 'team' | 'own' | 'none' access level
+ * Get all permissions for a specific resource
+ * @param resource Resource name
+ * @param userPermissions List of user's permissions
+ * @returns List of permissions for the specified resource
  */
-export const hasDataAccess = (
-  resourceOwnerId: string, 
-  resourceTeamId: string | null,
-  currentUser: {
-    id: string;
-    role?: string;
-    teamId?: string;
-  }
+export const getResourcePermissions = (
+  resource: string,
+  userPermissions: string[]
+): string[] => {
+  return userPermissions.filter(permission => 
+    permission.startsWith(`${resource}:`)
+  );
+};
+
+/**
+ * Determine user's access scope for a resource
+ * @param user Current user
+ * @param resourceOwnerId Owner ID of the resource
+ * @param resourceTeamId Team ID of the resource
+ * @returns Access scope (all, team, own, or none)
+ */
+export const getAccessScope = (
+  user: User | null,
+  resourceOwnerId?: string,
+  resourceTeamId?: string
 ): 'all' | 'team' | 'own' | 'none' => {
-  // Admin hoặc Division Manager có quyền truy cập tất cả
-  if (currentUser.role === 'Admin' || currentUser.role === 'Division Manager') {
+  if (!user) return 'none';
+  
+  // Admin or Division Manager has access to all resources
+  if (user.role === 'admin' || user.role === 'Division Manager') {
     return 'all';
   }
   
-  // Leader chỉ truy cập dữ liệu trong team
-  if (currentUser.role === 'Leader' && resourceTeamId === currentUser.teamId) {
-    return 'team';
+  // User is a Leader and resource belongs to their team
+  // Note: Access team data based on user context, not directly from user.teamId
+  if (user.role === 'Leader' && resourceTeamId) {
+    // Check if the leader is responsible for this team
+    // This might need to be adjusted based on how team association is stored
+    const userTeams = user.permissions?.filter(p => p.includes(':team')) || [];
+    if (userTeams.length > 0) {
+      return 'team';
+    }
   }
   
-  // Người dùng truy cập dữ liệu của chính mình
-  if (resourceOwnerId === currentUser.id) {
+  // User is the owner of the resource
+  if (resourceOwnerId && resourceOwnerId === user.id) {
     return 'own';
   }
   

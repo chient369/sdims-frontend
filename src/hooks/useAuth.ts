@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User } from '../types/api';
+import { User } from '../features/auth/types';
+import * as permissionUtils from '../utils/permissions';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -46,13 +47,29 @@ export const useAuth = () => {
     try {
       // Here you would call your API to login
       // This is a placeholder for demonstration
-      const user = {
+      const user: User = {
         id: '1',
+        username: email.split('@')[0],
         email,
         firstName: 'Test',
         lastName: 'User',
+        fullName: 'Test User',
         role: 'admin',
-        permissions: ['view_dashboard', 'manage_users'],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        permissions: [
+          'dashboard:read:all',
+          'employee:read:all',
+          'employee:update:all',
+          'employee-skill:read:all',
+          'margin:read:all',
+          'opportunity:read:all',
+          'opportunity:update:all',
+          'contract:read:all',
+          'report:read:all',
+          'config:read'
+        ],
       };
       
       const token = 'fake-jwt-token';
@@ -85,13 +102,36 @@ export const useAuth = () => {
     });
   }, []);
 
-  // Check permissions
-  const hasPermissions = useCallback((requiredPermissions: string[]) => {
-    if (!state.user || !state.user.permissions) return false;
+  // Check if user has a specific permission
+  const hasPermission = useCallback((requiredPermission: string): boolean => {
+    if (!state.user || !state.user.permissions) {
+      return false;
+    }
     
-    return requiredPermissions.every(permission => 
-      state.user?.permissions.includes(permission)
-    );
+    return permissionUtils.hasPermission(requiredPermission, state.user.permissions);
+  }, [state.user]);
+  
+  // Check if user has all required permissions
+  const hasPermissions = useCallback((requiredPermissions: string[]): boolean => {
+    if (!state.user || !state.user.permissions) {
+      return false;
+    }
+    
+    return permissionUtils.hasAllPermissions(requiredPermissions, state.user.permissions);
+  }, [state.user]);
+  
+  // Check if user has any of the required permissions
+  const hasAnyPermission = useCallback((requiredPermissions: string[]): boolean => {
+    if (!state.user || !state.user.permissions) {
+      return false;
+    }
+    
+    return permissionUtils.hasAnyPermission(requiredPermissions, state.user.permissions);
+  }, [state.user]);
+  
+  // Determine the permission scope based on resource ownership
+  const getAccessScope = useCallback((resourceOwnerId?: string, resourceTeamId?: string): 'all' | 'team' | 'own' | 'none' => {
+    return permissionUtils.getAccessScope(state.user, resourceOwnerId, resourceTeamId);
   }, [state.user]);
 
   return {
@@ -100,7 +140,10 @@ export const useAuth = () => {
     loading: state.loading,
     login,
     logout,
+    hasPermission,
     hasPermissions,
+    hasAnyPermission,
+    getAccessScope,
   };
 };
 

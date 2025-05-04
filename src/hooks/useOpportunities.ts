@@ -1,22 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  opportunityService,
+import { 
   OpportunityListParams,
   OpportunityResponse,
-  OpportunityDetailResponse,
   OpportunityCreateData,
   OpportunityUpdateData,
-  OpportunityNoteItem,
-  OpportunityAssignmentData,
-  HubspotSyncParams,
-  HubspotSyncLogParams
-} from '../services/api/opportunityService';
+  OpportunityNoteResponse,
+  OpportunityNoteCreateData,
+  SyncLogResponse
+} from '../features/opportunities/types';
+import * as opportunityApi from '../features/opportunities/api';
 
 // Hook for fetching opportunities with optional filtering and pagination
 export function useOpportunities(params?: OpportunityListParams) {
   return useQuery({
     queryKey: ['opportunities', params],
-    queryFn: () => opportunityService.getOpportunities(params)
+    queryFn: () => opportunityApi.getOpportunities(params)
   });
 }
 
@@ -24,7 +22,7 @@ export function useOpportunities(params?: OpportunityListParams) {
 export function useOpportunity(id: number | undefined, params?: { includeNotes?: boolean; includeHistory?: boolean }) {
   return useQuery({
     queryKey: ['opportunity', id, params],
-    queryFn: () => (id ? opportunityService.getOpportunityById(id, params) : Promise.reject('No ID provided')),
+    queryFn: () => (id ? opportunityApi.getOpportunityById(id.toString(), { params }) : Promise.reject('No ID provided')),
     enabled: !!id // Only run the query if we have an ID
   });
 }
@@ -34,7 +32,7 @@ export function useCreateOpportunity() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: OpportunityCreateData) => opportunityService.createOpportunity(data),
+    mutationFn: (data: OpportunityCreateData) => opportunityApi.createOpportunity(data),
     onSuccess: () => {
       // Invalidate the opportunities query to refetch the list
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -48,7 +46,7 @@ export function useUpdateOpportunity() {
   
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: OpportunityUpdateData }) => 
-      opportunityService.updateOpportunity(id, data),
+      opportunityApi.updateOpportunity(id.toString(), data),
     onSuccess: (_, variables) => {
       // Invalidate both the list and the specific opportunity query
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -62,7 +60,7 @@ export function useDeleteOpportunity() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) => opportunityService.deleteOpportunity(id),
+    mutationFn: (id: number) => opportunityApi.deleteOpportunity(id.toString()),
     onSuccess: () => {
       // Invalidate the opportunities query to refetch the list
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -75,8 +73,8 @@ export function useAssignUser() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ opportunityId, data }: { opportunityId: number; data: OpportunityAssignmentData }) => 
-      opportunityService.assignUser(opportunityId, data),
+    mutationFn: ({ opportunityId, data }: { opportunityId: number; data: { leaderId: string; message?: string; notifyLeader?: boolean } }) => 
+      opportunityApi.assignLeaderToOpportunity(opportunityId.toString(), data),
     onSuccess: (_, variables) => {
       // Invalidate both the list and the specific opportunity query
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -89,7 +87,7 @@ export function useAssignUser() {
 export function useOpportunityNotes(opportunityId: number | undefined) {
   return useQuery({
     queryKey: ['opportunity-notes', opportunityId],
-    queryFn: () => (opportunityId ? opportunityService.getNotes(opportunityId) : Promise.reject('No ID provided')),
+    queryFn: () => (opportunityId ? opportunityApi.getOpportunityNotes(opportunityId.toString()) : Promise.reject('No ID provided')),
     enabled: !!opportunityId
   });
 }
@@ -100,7 +98,7 @@ export function useAddOpportunityNote() {
   
   return useMutation({
     mutationFn: ({ opportunityId, content }: { opportunityId: number; content: string }) => 
-      opportunityService.addNote(opportunityId, { content }),
+      opportunityApi.addOpportunityNote(opportunityId.toString(), { content }),
     onSuccess: (_, variables) => {
       // Invalidate the notes query
       queryClient.invalidateQueries({ queryKey: ['opportunity-notes', variables.opportunityId] });
@@ -115,7 +113,11 @@ export function useMarkInteracted() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (opportunityId: number) => opportunityService.markInteracted(opportunityId),
+    mutationFn: (opportunityId: number) => {
+      // There seems to be no direct 'markInteracted' API, we would need to implement it
+      // This is a placeholder - you'll need to implement the actual API endpoint
+      return Promise.reject('API endpoint not implemented');
+    },
     onSuccess: (_, opportunityId) => {
       // Invalidate both the list and the specific opportunity query
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -128,7 +130,10 @@ export function useMarkInteracted() {
 export function useOpportunitySummaryByStatus() {
   return useQuery({
     queryKey: ['opportunity-summary-status'],
-    queryFn: () => opportunityService.getOpportunitySummaryByStatus()
+    queryFn: () => {
+      // This is a placeholder - you'll need to implement the actual API endpoint
+      return Promise.reject('API endpoint not implemented');
+    }
   });
 }
 
@@ -136,7 +141,13 @@ export function useOpportunitySummaryByStatus() {
 export function usePriorityOpportunities(params?: { limit?: number }) {
   return useQuery({
     queryKey: ['priority-opportunities', params],
-    queryFn: () => opportunityService.getPriorityOpportunities(params)
+    queryFn: () => {
+      // Filter opportunities with onsitePriority=true
+      return opportunityApi.getOpportunities({ 
+        onsitePriority: true,
+        limit: params?.limit
+      });
+    }
   });
 }
 
@@ -145,7 +156,7 @@ export function useSyncFromHubspot() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (params?: HubspotSyncParams) => opportunityService.syncFromHubspot(params),
+    mutationFn: () => opportunityApi.syncOpportunities(),
     onSuccess: () => {
       // Invalidate the opportunities query to refetch after sync
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
@@ -156,10 +167,16 @@ export function useSyncFromHubspot() {
 }
 
 // Hook for getting HubSpot sync logs
-export function useSyncLogs(params?: HubspotSyncLogParams) {
+export function useSyncLogs(params?: { 
+  page?: number;
+  limit?: number;
+  status?: 'success' | 'failed' | 'in_progress';
+  dateFrom?: string;
+  dateTo?: string;
+}) {
   return useQuery({
     queryKey: ['sync-logs', params],
-    queryFn: () => opportunityService.getSyncLogs(params)
+    queryFn: () => opportunityApi.getSyncLogs(params)
   });
 }
 
@@ -167,7 +184,10 @@ export function useSyncLogs(params?: HubspotSyncLogParams) {
 export function useSyncLogDetail(syncId: string | undefined) {
   return useQuery({
     queryKey: ['sync-log', syncId],
-    queryFn: () => (syncId ? opportunityService.getSyncLogById(syncId) : Promise.reject('No Sync ID provided')),
+    queryFn: () => {
+      // This is a placeholder - you'll need to implement the actual API endpoint
+      return Promise.reject('API endpoint not implemented');
+    },
     enabled: !!syncId
   });
 } 

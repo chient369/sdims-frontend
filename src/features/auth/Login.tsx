@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuthContext } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,7 +8,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const { login } = useAuthContext();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   

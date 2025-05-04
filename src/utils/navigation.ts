@@ -45,6 +45,19 @@ export const routePaths = {
     activities: (id: string) => `/opportunities/${id}/activities`,
     sync: '/opportunities/sync',
   },
+  
+  // Reports routes
+  reports: {
+    base: '/reports',
+    employees: '/reports/employees',
+    margins: '/reports/margins',
+    opportunities: '/reports/opportunities',
+    contracts: '/reports/contracts',
+    payments: '/reports/payments',
+    kpi: '/reports/kpi',
+    utilization: '/reports/utilization',
+    executive: '/reports/executive',
+  },
 };
 
 // Custom hook for programmatic navigation

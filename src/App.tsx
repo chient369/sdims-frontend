@@ -1,12 +1,15 @@
 import React from 'react';
 import AppRouter from './routes';
-import { AppProviders } from './providers/AppProviders';
+import { AppContextProvider } from './context';
+import NotificationWrapper from './components/notifications/NotificationWrapper';
 
 const App: React.FC = () => {
   return (
-    <AppProviders>
-      <AppRouter />
-    </AppProviders>
+    <AppContextProvider>
+      <NotificationWrapper>
+        <AppRouter />
+      </NotificationWrapper>
+    </AppContextProvider>
   );
 };
 

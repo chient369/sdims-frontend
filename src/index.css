@@ -187,3 +187,13 @@
     scroll-behavior: smooth;
   }
 }
+
+/* Toast animations */
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

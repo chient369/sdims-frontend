@@ -6,6 +6,8 @@ import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { Heading, Text } from '../components/ui/Typography';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { EmployeeList } from '../components/examples/TableExample';
+import NotificationExample from '../components/examples/NotificationExample';
 
 const ComponentDemo: React.FC = () => {
   return (
@@ -16,6 +18,16 @@ const ComponentDemo: React.FC = () => {
       </div>
       
       <div className="grid gap-8">
+        {/* Table Section */}
+        <section>
+          <Heading level={2} className="mb-4">Table Component</Heading>
+          <Card>
+            <CardContent className="pt-6">
+              <EmployeeList />
+            </CardContent>
+          </Card>
+        </section>
+
         {/* Typography Section */}
         <section>
           <Heading level={2} className="mb-4">Typography</Heading>
@@ -134,6 +146,12 @@ const ComponentDemo: React.FC = () => {
             <Alert variant="warning" title="Warning">This is a warning alert with a title</Alert>
             <Alert variant="error" title="Error">This is an error alert with a title</Alert>
           </div>
+        </section>
+
+        {/* Notification Section */}
+        <section>
+          <Heading level={2} className="mb-4">Notifications</Heading>
+          <NotificationExample />
         </section>
       </div>
     </div>

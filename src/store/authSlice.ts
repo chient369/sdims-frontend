@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand';
-import { User } from '../types/user';
-import { authApi } from '../services/authApi';
+import { User } from '../features/auth/types';
+import { authService } from '../features/auth/service';
 import { hasPermission, hasAnyPermission, hasAllPermissions } from '../utils/permissions';
 
 export interface AuthState {
@@ -40,7 +40,7 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   login: async (username: string, password: string, remember_me = false) => {
     set({ isLoading: true, error: null });
     try {
-      const { user, token, token_type, expires_in } = await authApi.login(username, password, remember_me);
+      const { user, token, token_type, expires_in } = await authService.login(username, password, remember_me);
       
       // Save to localStorage
       localStorage.setItem('token', token);
@@ -72,7 +72,7 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   },
   
   logout: () => {
-    authApi.logout().finally(() => {
+    authService.logout().finally(() => {
       localStorage.removeItem('token');
       localStorage.removeItem('token_type');
       localStorage.removeItem('expires_in');
@@ -96,7 +96,7 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
     set({ isLoading: true });
     
     try {
-      const user = await authApi.getCurrentUser();
+      const user = await authService.getCurrentUser();
       set({
         user,
         isAuthenticated: true,

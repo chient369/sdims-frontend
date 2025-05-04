@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  employeeService, 
   EmployeeListParams, 
   EmployeeCreateData, 
   EmployeeUpdateData,
-  EmployeeSkillsData
-} from '../services/api/employeeService';
+  EmployeeSkillCreateData
+} from '../features/hrm/types';
+import {employeeService, teamService, skillService} from '../features/hrm/service';
 
 // Hook for fetching employees with optional filtering and pagination
 export function useEmployees(params?: EmployeeListParams) {
@@ -16,7 +16,7 @@ export function useEmployees(params?: EmployeeListParams) {
 }
 
 // Hook for fetching a single employee by ID
-export function useEmployee(id: number | undefined) {
+export function useEmployee(id: string | undefined) {
   return useQuery({
     queryKey: ['employee', id],
     queryFn: () => (id ? employeeService.getEmployeeById(id) : Promise.reject('No ID provided')),
@@ -43,7 +43,7 @@ export function useUpdateEmployee() {
   
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: EmployeeUpdateData }) => 
-      employeeService.updateEmployee(id, data),
+      employeeService.updateEmployee(id.toString(), data),
     onSuccess: (_, variables) => {
       // Invalidate both the list and the specific employee query
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -57,7 +57,7 @@ export function useDeleteEmployee() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) => employeeService.deleteEmployee(id),
+    mutationFn: (id: string) => employeeService.deleteEmployee(id),
     onSuccess: () => {
       // Invalidate the employees query to refetch the list
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -70,7 +70,7 @@ export function useUploadAvatar() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ employeeId, file }: { employeeId: number; file: File }) => 
+    mutationFn: ({ employeeId, file }: { employeeId: string; file: File }) => 
       employeeService.uploadAvatar(employeeId, file),
     onSuccess: (_, variables) => {
       // Invalidate the specific employee query
@@ -83,15 +83,15 @@ export function useUploadAvatar() {
 export function useTeams() {
   return useQuery({
     queryKey: ['teams'],
-    queryFn: () => employeeService.getTeams()
+    queryFn: () => teamService.getTeams()
   });
 }
 
 // Hook for fetching a single team
-export function useTeam(id: number | undefined) {
+export function useTeam(id: string | undefined) {
   return useQuery({
     queryKey: ['team', id],
-    queryFn: () => (id ? employeeService.getTeamById(id) : Promise.reject('No ID provided')),
+    queryFn: () => (id ? teamService.getTeamById(id) : Promise.reject('No ID provided')),
     enabled: !!id
   });
 }
@@ -100,15 +100,15 @@ export function useTeam(id: number | undefined) {
 export function useSkills() {
   return useQuery({
     queryKey: ['skills'],
-    queryFn: () => employeeService.getSkills()
+    queryFn: () => skillService.getSkills()
   });
 }
 
 // Hook for fetching employee skills
-export function useEmployeeSkills(employeeId: number | undefined) {
+export function useEmployeeSkills(employeeId: string | undefined) {
   return useQuery({
     queryKey: ['employee-skills', employeeId],
-    queryFn: () => (employeeId ? employeeService.getEmployeeSkills(employeeId) : Promise.reject('No ID provided')),
+    queryFn: () => (employeeId ? skillService.getEmployeeSkills(employeeId) : Promise.reject('No ID provided')),
     enabled: !!employeeId
   });
 }
@@ -118,8 +118,8 @@ export function useUpdateEmployeeSkills() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ employeeId, data }: { employeeId: number; data: EmployeeSkillsData }) => 
-      employeeService.updateEmployeeSkills(employeeId, data),
+    mutationFn: ({ employeeId, data }: { employeeId: string; data: EmployeeSkillCreateData[] }) => 
+      skillService.updateEmployeeSkills(employeeId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['employee-skills', variables.employeeId] });
       queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });

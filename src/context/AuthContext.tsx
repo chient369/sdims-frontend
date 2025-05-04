@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { User } from '../types/user';
-import { authService } from '../services/features/auth/authService';
+import { User } from '../features/auth/types';
+import { authService } from '../features/auth/service';
 import { hasPermission, hasAnyPermission, hasAllPermissions } from '../utils/permissions';
 
 type AuthState = {
