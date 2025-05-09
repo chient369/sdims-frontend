@@ -15,18 +15,26 @@ import {
   EmployeeStatusUpdateData,
   ImportEmployeesResponse,
   EmployeeProjectHistoryResponse,
+  EmployeeDeleteResponse,
+  EmployeeSuggestionsResponseWrapper,
+  PaginatedEmployeeResponse,
   
   // Skill Types
   SkillCategoryResponse,
   SkillResponse,
   EmployeeSkillResponse,
+  EmployeeSkillsResponse,
+  EmployeeSkillsParams,
   EmployeeSkillCreateData,
+  EmployeeSkillDeleteResponse,
+  EmployeeSkillDetail,
   
   // Team Types
   TeamInfo,
   TeamCreateData,
   TeamUpdateData,
-  TeamMemberResponse
+  TeamMemberResponse,
+  EmployeeSuggestParams
 } from './types';
 
 import {
@@ -54,7 +62,7 @@ import {
   updateSkill as updateSkillApi,
   deleteSkill as deleteSkillApi,
   getEmployeeSkills as getEmployeeSkillsApi,
-  updateEmployeeSkills as updateEmployeeSkillsApi,
+  addOrUpdateEmployeeSkill as addOrUpdateEmployeeSkillApi,
   deleteEmployeeSkill as deleteEmployeeSkillApi,
   
   // Team API
@@ -75,21 +83,13 @@ import {
 
 class EmployeeService extends BaseApiService {
   constructor() {
-    super('/api/v1/hrm/employees');
+    super('/api/v1/employees');
   }
 
   /**
    * Get employees with filtering and pagination
    */
-  async getEmployees(params?: EmployeeListParams): Promise<{
-    data: EmployeeResponse[];
-    meta: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-  }> {
+  async getEmployees(params?: EmployeeListParams): Promise<PaginatedEmployeeResponse> {
     return getEmployeesApi(params);
   }
 
@@ -117,7 +117,7 @@ class EmployeeService extends BaseApiService {
   /**
    * Delete an employee
    */
-  async deleteEmployee(id: string): Promise<void> {
+  async deleteEmployee(id: string): Promise<EmployeeDeleteResponse> {
     return deleteEmployeeApi(id);
   }
 
@@ -143,12 +143,7 @@ class EmployeeService extends BaseApiService {
   /**
    * Suggest employees for project based on skills and availability
    */
-  async suggestEmployees(params: {
-    skillIds: string[];
-    startDate: string;
-    endDate?: string;
-    count?: number;
-  }): Promise<EmployeeResponse[]> {
+  async suggestEmployees(params: EmployeeSuggestParams): Promise<EmployeeSuggestionsResponseWrapper> {
     return suggestEmployeesApi(params);
   }
 
@@ -206,10 +201,10 @@ class EmployeeService extends BaseApiService {
    */
   async getEmployeeDetails(employeeId: string): Promise<{
     employee: EmployeeResponse;
-    skills: EmployeeSkillResponse[];
+    skills: EmployeeSkillDetail[];
     projectHistory: EmployeeProjectHistoryResponse[];
   }> {
-    const [employee, skills, projectHistoryResponse] = await Promise.all([
+    const [employee, skillsResponse, projectHistoryResponse] = await Promise.all([
       this.getEmployeeById(employeeId),
       getEmployeeSkillsApi(employeeId),
       this.getEmployeeProjectHistory(employeeId, { limit: 100 }),
@@ -217,7 +212,7 @@ class EmployeeService extends BaseApiService {
 
     return {
       employee,
-      skills,
+      skills: skillsResponse.skills,
       projectHistory: projectHistoryResponse.data,
     };
   }
@@ -229,7 +224,7 @@ class EmployeeService extends BaseApiService {
 
 class SkillService extends BaseApiService {
   constructor() {
-    super('/api/v1/hrm/skills');
+    super('/api/v1/skills');
   }
 
   /**
@@ -239,8 +234,8 @@ class SkillService extends BaseApiService {
     page?: number;
     limit?: number;
   }): Promise<{
-    data: SkillCategoryResponse[];
-    meta: {
+    content: SkillCategoryResponse[];
+    pageable: {
       total: number;
       page: number;
       limit: number;
@@ -289,8 +284,8 @@ class SkillService extends BaseApiService {
     limit?: number;
     keyword?: string;
   }): Promise<{
-    data: SkillResponse[];
-    meta: {
+    content: SkillResponse[];
+    pageable: {
       total: number;
       page: number;
       limit: number;
@@ -335,18 +330,22 @@ class SkillService extends BaseApiService {
   /**
    * Get employee skills
    */
-  async getEmployeeSkills(employeeId: string): Promise<EmployeeSkillResponse[]> {
-    return getEmployeeSkillsApi(employeeId);
+  async getEmployeeSkills(
+    employeeId: string,
+    params?: Omit<EmployeeSkillsParams, 'employeeId'>
+  ): Promise<EmployeeSkillDetail[]> {
+    const response = await getEmployeeSkillsApi(employeeId, params);
+    return response.skills;
   }
 
   /**
-   * Update employee skills
+   * Add or update a skill for an employee
    */
-  async updateEmployeeSkills(
+  async addOrUpdateEmployeeSkill(
     employeeId: string,
-    data: EmployeeSkillCreateData[]
-  ): Promise<EmployeeSkillResponse[]> {
-    return updateEmployeeSkillsApi(employeeId, data);
+    data: EmployeeSkillCreateData
+  ): Promise<EmployeeSkillResponse> {
+    return addOrUpdateEmployeeSkillApi(employeeId, data);
   }
 
   /**
@@ -355,7 +354,7 @@ class SkillService extends BaseApiService {
   async deleteEmployeeSkill(
     employeeId: string,
     skillId: string
-  ): Promise<void> {
+  ): Promise<EmployeeSkillDeleteResponse> {
     return deleteEmployeeSkillApi(employeeId, skillId);
   }
 
@@ -371,9 +370,9 @@ class SkillService extends BaseApiService {
       this.getSkills({ limit: 1000 }),
     ]);
 
-    const categories = categoriesResponse.data.map(category => ({
+    const categories = categoriesResponse.content.map(category => ({
       ...category,
-      skills: skillsResponse.data.filter(skill => skill.categoryId === category.id),
+      skills: skillsResponse.content.filter(skill => skill.category.id === category.id),
     }));
 
     return { categories };
@@ -386,7 +385,7 @@ class SkillService extends BaseApiService {
 
 class TeamService extends BaseApiService {
   constructor() {
-    super('/api/v1/hrm/teams');
+    super('/api/v1/teams');
   }
 
   /**
@@ -397,8 +396,8 @@ class TeamService extends BaseApiService {
     limit?: number;
     keyword?: string;
   }): Promise<{
-    data: TeamInfo[];
-    meta: {
+    content: TeamInfo[];
+    pageable: {
       total: number;
       page: number;
       limit: number;
