@@ -6,13 +6,17 @@ import Breadcrumb from './Breadcrumb';
 import Footer from './Footer';
 import ErrorBoundary from '../ui/ErrorBoundary';
 
+interface MainLayoutProps {
+  children?: React.ReactNode;
+}
+
 /**
  * MainLayout component that provides the main application layout structure
  * with responsive sidebar, header, breadcrumb navigation, and footer
  * 
  * @returns {JSX.Element} The rendered layout with children content
  */
-const MainLayout: React.FC = () => {
+const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // State for sidebar collapse/expand functionality
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // State for mobile sidebar visibility
@@ -83,7 +87,7 @@ const MainLayout: React.FC = () => {
             {/* Page Content */}
             <main className="flex-1 p-4">
               <div className="w-full">
-                <Outlet />
+                {children || <Outlet />}
               </div>
             </main>
             

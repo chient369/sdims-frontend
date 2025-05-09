@@ -143,7 +143,7 @@ export function Table<TData>({
                   key={row.id}
                   className={cn(
                     "border-b hover:bg-gray-50 transition-colors",
-                    row.getIsSelected() && "bg-primary-50",
+                    enableRowSelection && row.getIsSelected() && "bg-primary-50",
                     onRowClick && "cursor-pointer",
                     rowClassName && rowClassName(row.original)
                   )}

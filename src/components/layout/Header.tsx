@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate, Link } from 'react-router-dom';
+import { User, UserProfile } from '../../features/auth/types';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -13,13 +16,93 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const { state } = useAuth();
+  const navigate = useNavigate();
   
-  // Mock data - in a real app, this would come from user context/state
-  const user = {
-    name: 'Nguyen Van A',
-    email: 'nguyenvana@example.com',
-    role: 'Developer',
-    avatar: null // Placeholder for user avatar
+  // Debug log to check the state data
+  useEffect(() => {
+    console.log('Auth State in Header:', JSON.stringify({
+      user: state.user,
+      userProfile: state.userProfile,
+      isAuthenticated: state.isAuthenticated
+    }, null, 2));
+  }, [state]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isUserMenuOpen || isNotificationsOpen) {
+        setIsUserMenuOpen(false);
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    // Add event listener when the dropdown is open
+    if (isUserMenuOpen || isNotificationsOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    // Clean up the event listener
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isUserMenuOpen, isNotificationsOpen]);
+  
+  // Get user display name based on available properties
+  const getUserDisplayName = (): string => {
+    if (state.userProfile?.user) {
+      return String(state.userProfile.user.fullname || '');
+    } else if (state.user) {
+      return String(state.user.fullName || state.user.username || '');
+    }
+    return 'User';
+  };
+  
+  // Get user email
+  const getUserEmail = (): string => {
+    if (state.userProfile?.user) {
+      return String(state.userProfile.user.email || '');
+    } else if (state.user) {
+      return String(state.user.email || '');
+    }
+    return 'user@example.com';
+  };
+  
+  // Get user role
+  const getUserRole = (): string => {
+    if (state.userProfile?.user) {
+      return String(state.userProfile.user.role || '');
+    } else if (state.user) {
+      return String(state.user.role || '');
+    }
+    return 'User';
+  };
+  
+  // Get user avatar (first character of display name)
+  const getAvatarInitial = (): string => {
+    const displayName = getUserDisplayName();
+    return displayName.charAt(0) || 'U';
+  };
+  
+  // Handle user menu toggle
+  const handleUserMenuToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsUserMenuOpen(!isUserMenuOpen);
+    setIsNotificationsOpen(false);
+  };
+  
+  // Handle notifications toggle
+  const handleNotificationsToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsNotificationsOpen(!isNotificationsOpen);
+    setIsUserMenuOpen(false);
+  };
+  
+  // Handle sign out
+  const handleSignOut = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsUserMenuOpen(false);
+    navigate('/logout');
   };
   
   // Mock notifications - in a real app, this would come from API/context
@@ -56,7 +139,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
         {/* Notifications */}
         <div className="relative">
           <button 
-            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            onClick={handleNotificationsToggle}
             className="relative p-1 text-secondary-500 hover:text-secondary-700 focus:outline-none"
             aria-label={`${unreadCount} unread notifications`}
           >
@@ -112,42 +195,37 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
         {/* User menu */}
         <div className="relative">
           <button 
-            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            onClick={handleUserMenuToggle}
             className="flex items-center space-x-2 focus:outline-none"
             aria-label="Open user menu"
           >
-            <span className="hidden md:block text-sm text-secondary-700">{user.name}</span>
-            {user.avatar ? (
-              <img 
-                src={user.avatar} 
-                alt={user.name} 
-                className="h-8 w-8 rounded-full"
-              />
-            ) : (
-              <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white font-semibold">
-                {user.name.charAt(0)}
-              </div>
-            )}
+            <span className="hidden md:block text-sm text-secondary-700">{getUserDisplayName()}</span>
+            <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white font-semibold">
+              {getAvatarInitial()}
+            </div>
           </button>
           
           {/* User dropdown */}
           {isUserMenuOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-secondary-200">
               <div className="px-4 py-2 border-b border-secondary-200">
-                <p className="text-sm font-semibold text-secondary-800">{user.name}</p>
-                <p className="text-xs text-secondary-500">{user.email}</p>
-                <p className="text-xs text-secondary-500 mt-1">{user.role}</p>
+                <p className="text-sm font-semibold text-secondary-800">{getUserDisplayName()}</p>
+                <p className="text-xs text-secondary-500">{getUserEmail()}</p>
+                <p className="text-xs text-secondary-500 mt-1">{getUserRole()}</p>
               </div>
               
-              <a href="/profile" className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50">
+              <Link to="/profile" className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50">
                 Profile
-              </a>
-              <a href="/settings" className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50">
+              </Link>
+              <Link to="/settings" className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50">
                 Settings
-              </a>
-              <a href="/logout" className="block px-4 py-2 text-sm text-red-600 hover:bg-secondary-50 border-t border-secondary-200">
+              </Link>
+              <button 
+                onClick={handleSignOut}
+                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-secondary-50 border-t border-secondary-200"
+              >
                 Sign out
-              </a>
+              </button>
             </div>
           )}
         </div>

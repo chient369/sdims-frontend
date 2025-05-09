@@ -7,6 +7,7 @@ interface PrivateRouteProps {
   children: React.ReactNode;
   requiredPermissions?: string[];
   requiredRoles?: string[];
+  requireAll?: boolean;
 }
 
 /**
@@ -18,8 +19,9 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
   children,
   requiredPermissions = [],
   requiredRoles = [],
+  requireAll = true,
 }) => {
-  const { state, hasPermission, hasAllPermissions } = useAuth();
+  const { state, hasPermission, hasAllPermission, hasAnyPermission } = useAuth();
   const { isAuthenticated, isLoading, user } = state;
   const location = useLocation();
 
@@ -40,7 +42,10 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
 
   // Check permissions if required
   if (requiredPermissions.length > 0) {
-    const hasRequiredPermissions = hasAllPermissions(requiredPermissions);
+    // Dựa vào requireAll để quyết định cách kiểm tra quyền
+    const hasRequiredPermissions = requireAll 
+      ? hasAllPermission(requiredPermissions)
+      : hasAnyPermission(requiredPermissions);
     
     if (!hasRequiredPermissions) {
       return <Navigate to="/unauthorized" replace />;
@@ -49,7 +54,17 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
 
   // Check roles if required
   if (requiredRoles.length > 0 && user?.role) {
-    const hasRequiredRole = requiredRoles.includes(user.role);
+    let hasRequiredRole = false;
+    
+    if (Array.isArray(user.role)) {
+      // Nếu user có nhiều role, kiểm tra xem có bất kỳ role nào phù hợp không
+      hasRequiredRole = user.role.some(role => 
+        typeof role === 'string' && requiredRoles.includes(role)
+      );
+    } else if (typeof user.role === 'string') {
+      // Trường hợp role là một string
+      hasRequiredRole = requiredRoles.includes(user.role);
+    }
     
     if (!hasRequiredRole) {
       return <Navigate to="/unauthorized" replace />;
