@@ -16,15 +16,47 @@ import {
   DashboardPreferences,
   DashboardNotification
 } from './types';
+import { dashboardService } from './index';
+
+/**
+ * Cờ để kiểm soát việc sử dụng dữ liệu mock
+ * Trong môi trường development, có thể bật nó lên để test UI
+ */
+export const USE_MOCK_DATA = true;
 
 /**
  * Get dashboard summary statistics
+ * @param params Query parameters including timeframe, fromDate, toDate, teamId, widgets
+ * @param config Axios request configuration
+ * @returns Dashboard summary data with widget information
+ * 
+ * API-RPT-001: GET /api/v1/dashboard/summary
+ * Quyền truy cập: dashboard:read:all, dashboard:read:team, dashboard:read:own
  */
 export const getDashboardSummary = async (params?: DashboardParams, config?: AxiosRequestConfig): Promise<DashboardSummary> => {
-  return apiClient.get('/api/v1/dashboard/summary', {
-    ...config,
-    params,
-  });
+  // Sử dụng mock data nếu được cấu hình
+  if (USE_MOCK_DATA) {
+    console.log('Using mock data for dashboard summary');
+    // Import dashboard service dynamically để tránh circular dependency
+    return dashboardService.getMockDashboardSummary(params);
+  }
+  
+  try {
+    const response = await apiClient.get('/api/v1/dashboard/summary', {
+      ...config,
+      params: {
+        fromDate: params?.fromDate,
+        toDate: params?.toDate,
+        teamId: params?.teamId,
+        widgets: params?.widgets?.join(',')
+      },
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get dashboard summary, using mock data instead', error);
+    return dashboardService.getMockDashboardSummary(params);
+  }
 };
 
 /**

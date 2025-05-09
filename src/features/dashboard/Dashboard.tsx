@@ -1,57 +1,327 @@
-import React from 'react';
-import { useAuthContext } from '../../context/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/Card';
+import { PermissionGuard } from '@components/ui';
+import { 
+  TimeRangeFilter, 
+  DashboardAlert,
+  TeamFilter,
+  EmployeeAvailableWidget, 
+  EmployeeEndingSoonWidget,
+  UtilizationRateWidget,
+  MarginDistributionWidget,
+  OpportunityWidget,
+  SalesFunnelWidget,
+  RevenueWidget,
+  DebtWidget
+} from './components';
+import { getDashboardSummary } from './api';
+import { DashboardSummary } from './types';
+import { useDashboardPermissions } from './hooks';
+
+// Widget fallback component hiển thị khi user không có quyền
+const WidgetFallback: React.FC<{ title: string }> = ({ title }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle>{title}</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="flex items-center justify-center h-32 bg-gray-50 rounded-md">
+        <p className="text-sm text-gray-500">Bạn không có quyền xem nội dung này</p>
+      </div>
+    </CardContent>
+  </Card>
+);
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuthContext();
+  const { user } = useAuth();
+  const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+  const [showAlert, setShowAlert] = useState<boolean>(true);
+  const { 
+    canViewEmployeeWidgets,
+    canViewUtilizationWidget,
+    canViewMarginWidget,
+    canViewOpportunityWidgets,
+    canViewRevenueWidget,
+    canViewDebtWidget,
+    canViewSalesFunnelWidget
+  } = useDashboardPermissions();
+  
+  // Load dashboard data khi timeframe hoặc selectedTeamId thay đổi
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Thêm teamId vào params nếu đã chọn
+        const params = { 
+          timeframe,
+          teamId: selectedTeamId || undefined
+        };
+        const data = await getDashboardSummary(params);
+        setDashboardData(data);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDashboardData();
+  }, [timeframe, selectedTeamId]);
+  
+  const handleTimeframeChange = (newTimeframe: 'week' | 'month' | 'quarter' | 'year') => {
+    setTimeframe(newTimeframe);
+    // Lưu timeframe vào localStorage để giữ trạng thái cho lần sau
+    localStorage.setItem('dashboard_timeframe', newTimeframe);
+  };
+  
+  const handleTeamChange = (teamId: string | null) => {
+    setSelectedTeamId(teamId);
+    // Lưu teamId vào localStorage
+    if (teamId) {
+      localStorage.setItem('dashboard_teamId', teamId);
+    } else {
+      localStorage.removeItem('dashboard_teamId');
+    }
+  };
+  
+  const handleDismissAlert = () => {
+    setShowAlert(false);
+  };
+  
+  // Load saved filters from localStorage
+  useEffect(() => {
+    const savedTimeframe = localStorage.getItem('dashboard_timeframe');
+    if (savedTimeframe) {
+      setTimeframe(savedTimeframe as 'week' | 'month' | 'quarter' | 'year');
+    }
+    
+    const savedTeamId = localStorage.getItem('dashboard_teamId');
+    if (savedTeamId) {
+      setSelectedTeamId(savedTeamId);
+    }
+  }, []);
+  
+  // Mock data khi chưa có data thật
+  const mockData = {
+    employeeAvailable: {
+      totalEmployees: 12,
+      change: 3,
+      periodLabel: 'tuần trước'
+    },
+    employeeEndingSoon: {
+      totalEmployees: 8,
+      change: -2,
+      periodLabel: 'tuần trước'
+    },
+    utilizationRate: {
+      rate: 78,
+      change: 5,
+      periodLabel: 'tuần trước'
+    },
+    marginDistribution: {
+      distribution: {
+        green: { count: 60, percentage: 60 },
+        yellow: { count: 25, percentage: 25 },
+        red: { count: 15, percentage: 15 }
+      },
+      totalEmployees: 100
+    },
+    newOpportunities: {
+      totalOpportunities: 23,
+      change: 7,
+      periodLabel: 'tuần trước'
+    },
+    followOpportunities: {
+      totalOpportunities: 9,
+      change: 2,
+      periodLabel: 'tuần trước'
+    },
+    salesFunnel: {
+      stages: [
+        { stage: 'Mới', count: 45, value: 1000000000 },
+        { stage: 'Liên hệ', count: 32, value: 800000000 },
+        { stage: 'Đánh giá', count: 24, value: 600000000 },
+        { stage: 'Đề xuất', count: 18, value: 400000000 },
+        { stage: 'Đàm phán', count: 12, value: 300000000 },
+        { stage: 'Thành công', count: 7, value: 200000000 }
+      ],
+      totalValue: 3300000000,
+      conversionRate: 15.6
+    },
+    revenue: {
+      target: 410000000,
+      actual: 348500000,
+      achievement: 85
+    },
+    debt: {
+      totalTransactions: 3,
+      totalAmount: 1500000000,
+      overdue: {
+        amount: 800000000,
+        transactions: 3
+      }
+    }
+  };
   
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-secondary-900 mb-6">Dashboard</h1>
-      
-      <div className="bg-white rounded-md shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-secondary-800 mb-4">Welcome, {user?.firstName || 'User'}!</h2>
-        <p className="text-secondary-600">
-          This is your dashboard for the SDIMS (Internal Management System). From here you can access all the features you have permission to use.
-        </p>
+    <div className="p-4 md:p-0">
+      {/* Bộ lọc dashboard */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="w-full sm:w-48">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Bộ phận/Team
+          </label>
+          <TeamFilter 
+            selectedTeamId={selectedTeamId}
+            onTeamChange={handleTeamChange}
+          />
+        </div>
+        
+        <TimeRangeFilter
+          currentTimeframe={timeframe}
+          onTimeframeChange={handleTimeframeChange}
+        />
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Card placeholders */}
-        <div className="bg-white rounded-md shadow-sm p-6">
-          <div className="flex items-center mb-4">
-            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-            <h3 className="ml-3 text-lg font-semibold text-secondary-800">Human Resources</h3>
-          </div>
-          <p className="text-secondary-600">Manage employees, skills, and project assignments</p>
+      {/* Thông báo quan trọng */}
+      {canViewEmployeeWidgets() && showAlert && (
+        <div className="mb-6">
+          <DashboardAlert
+            title="Thông báo quan trọng"
+            message="5 nhân viên đang ở trạng thái margin đỏ cần được xem xét"
+            type="warning"
+            hasDismissAction={true}
+            hasViewAction={true}
+            viewActionLabel="Xem chi tiết"
+            viewActionUrl="/margin/employees?status=red"
+            onDismiss={handleDismissAlert}
+          />
         </div>
-        
-        <div className="bg-white rounded-md shadow-sm p-6">
-          <div className="flex items-center mb-4">
-            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="ml-3 text-lg font-semibold text-secondary-800">Margin Management</h3>
-          </div>
-          <p className="text-secondary-600">Track costs, revenue, and analyze margin metrics</p>
+      )}
+      
+      {/* Row 1: HR Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="md:col-span-1">
+          {canViewEmployeeWidgets() ? (
+            <EmployeeAvailableWidget 
+              data={mockData.employeeAvailable}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Nhân sự Sẵn sàng" />
+          )}
         </div>
-        
-        <div className="bg-white rounded-md shadow-sm p-6">
-          <div className="flex items-center mb-4">
-            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="ml-3 text-lg font-semibold text-secondary-800">Contracts</h3>
-          </div>
-          <p className="text-secondary-600">Manage contracts, payment terms, and track revenue</p>
+        <div className="md:col-span-1">
+          {canViewEmployeeWidgets() ? (
+            <EmployeeEndingSoonWidget
+              data={mockData.employeeEndingSoon}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Nhân sự Sắp hết Dự án" />
+          )}
         </div>
+        <div className="md:col-span-1">
+          {canViewUtilizationWidget() ? (
+            <UtilizationRateWidget
+              data={mockData.utilizationRate}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Tỷ lệ Sử dụng Nguồn lực" />
+          )}
+        </div>
+      </div>
+      
+      {/* Row 2: Margin and Opportunity Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="md:col-span-1">
+          {canViewMarginWidget() ? (
+            <MarginDistributionWidget
+              data={mockData.marginDistribution}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Phân bố Margin" />
+          )}
+        </div>
+        <div className="md:col-span-1">
+          {canViewOpportunityWidgets() ? (
+            <OpportunityWidget
+              data={mockData.newOpportunities}
+              type="new"
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Cơ hội Mới" />
+          )}
+        </div>
+        <div className="md:col-span-1">
+          {canViewOpportunityWidgets() ? (
+            <OpportunityWidget
+              data={mockData.followOpportunities}
+              type="follow"
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Cơ hội Cần Theo dõi" />
+          )}
+        </div>
+      </div>
+      
+      {/* Row 3: Contract, Revenue, Debt */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="md:col-span-1">
+          {canViewOpportunityWidgets() ? (
+            <OpportunityWidget
+              data={{ 
+                totalOpportunities: 7, 
+                change: 0, 
+                periodLabel: 'tuần trước' 
+              }}
+              type="all"
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Tổng số Cơ hội" />
+          )}
+        </div>
+        <div className="md:col-span-1">
+          {canViewRevenueWidget() ? (
+            <RevenueWidget
+              data={mockData.revenue}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Doanh thu vs KPI" />
+          )}
+        </div>
+        <div className="md:col-span-1">
+          {canViewDebtWidget() ? (
+            <DebtWidget
+              data={mockData.debt}
+              loading={loading}
+            />
+          ) : (
+            <WidgetFallback title="Công nợ Quá hạn" />
+          )}
+        </div>
+      </div>
+      
+      {/* Row 4: Sales Funnel */}
+      <div className="grid grid-cols-1 gap-6">
+        {canViewSalesFunnelWidget() ? (
+          <SalesFunnelWidget
+            data={mockData.salesFunnel}
+            loading={loading}
+          />
+        ) : (
+          <WidgetFallback title="Phễu Bán hàng" />
+        )}
       </div>
     </div>
   );

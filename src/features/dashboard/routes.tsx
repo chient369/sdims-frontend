@@ -1,26 +1,19 @@
 import { lazy } from 'react';
-import { Navigate } from 'react-router-dom';
 import { PrivateRoute } from '../auth/routes';
 
 // Lazy loaded components
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const DashboardSettings = lazy(() => import('./pages/DashboardSettings'));
+const DashboardPage = lazy(() => import('./Dashboard'));
 
-// Define dashboard routes
+// Define dashboard routes with permission check
 export const DashboardRoutes = [
   {
     path: "/dashboard",
     element: (
-      <PrivateRoute>
+      <PrivateRoute 
+        requiredPermissions={["dashboard:read:all", "dashboard:read:team", "dashboard:read:own"]}
+        requireAll={false}
+      >
         <DashboardPage />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/dashboard/settings",
-    element: (
-      <PrivateRoute>
-        <DashboardSettings />
       </PrivateRoute>
     )
   }

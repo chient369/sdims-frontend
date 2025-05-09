@@ -13,12 +13,17 @@
  * Summary statistics for the dashboard
  */
 export interface DashboardSummary {
-  totalProjects: number;
-  activeProjects: number;
-  totalEmployees: number;
-  activeEmployees: number;
-  upcomingDeadlines: number;
-  overduePayments: number;
+  dateRange: {
+    fromDate: string;
+    toDate: string;
+  };
+  widgets: {
+    opportunity_status?: OpportunityStatusWidget;
+    margin_distribution?: MarginDistributionWidget;
+    revenue_summary?: RevenueSummaryWidget;
+    employee_status?: EmployeeStatusWidget;
+    utilization_rate?: UtilizationRateWidget;
+  };
 }
 
 /**
@@ -50,10 +55,12 @@ export interface RevenueDataPoint {
  */
 export interface DashboardParams {
   timeframe?: 'week' | 'month' | 'quarter' | 'year';
+  fromDate?: string;
+  toDate?: string;
   startDate?: string;
   endDate?: string;
-  teamId?: string;
-  userId?: string;
+  teamId?: string | null;
+  widgets?: string[];
 }
 
 //-----------------------------------------------------------------------------
@@ -99,4 +106,111 @@ export interface DashboardNotification {
   isRead: boolean;
   actionUrl?: string;
   actionLabel?: string;
+}
+
+//-----------------------------------------------------------------------------
+// Dashboard Widget Data Types
+//-----------------------------------------------------------------------------
+
+/**
+ * Opportunity Status Widget Data
+ */
+export interface OpportunityStatusWidget {
+  totalOpportunities: number;
+  byStatus: {
+    green: number;
+    yellow: number;
+    red: number;
+  };
+  byDealStage: Array<{
+    stage: string;
+    count: number;
+  }>;
+  topOpportunities: Array<{
+    id: number;
+    name: string;
+    customer: string;
+    value: number;
+    stage: string;
+    lastInteraction: string;
+  }>;
+}
+
+/**
+ * Margin Distribution Widget Data
+ */
+export interface MarginDistributionWidget {
+  totalEmployees: number;
+  distribution: {
+    green: { count: number; percentage: number };
+    yellow: { count: number; percentage: number };
+    red: { count: number; percentage: number };
+  };
+  trend: Array<{
+    month: string;
+    value: number;
+  }>;
+}
+
+/**
+ * Revenue Summary Widget Data
+ */
+export interface RevenueSummaryWidget {
+  currentMonth: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  currentQuarter: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  ytd: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  contracts: {
+    total: number;
+    newlyAdded: number;
+  };
+  payment: {
+    totalDue: number;
+    overdue: number;
+    upcoming: number;
+  };
+}
+
+/**
+ * Employee Status Widget Data
+ */
+export interface EmployeeStatusWidget {
+  totalEmployees: number;
+  byStatus: {
+    allocated: number;
+    available: number;
+    endingSoon: number;
+    onLeave: number;
+  };
+  endingSoonList: Array<{
+    id: number;
+    name: string;
+    projectEndDate: string;
+  }>;
+}
+
+/**
+ * Utilization Rate Widget Data
+ */
+export interface UtilizationRateWidget {
+  overall: number;
+  byTeam: Array<{
+    team: string;
+    rate: number;
+  }>;
+  trend: Array<{
+    month: string;
+    value: number;
+  }>;
 } 
