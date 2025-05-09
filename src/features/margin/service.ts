@@ -169,69 +169,6 @@ class MarginService extends BaseApiService {
       pageable: response.pageable
     };
   }
-
-  /**
-   * Get margin trends for a team (convenience method)
-   */
-  async getTeamMarginTrends(teamId: number, period: PeriodType = 'month', limit: number = 6): Promise<{
-    team: TeamMarginData | undefined;
-    trends: {
-      periods: string[];
-      margins: number[];
-    };
-  }> {
-    const response = await getMarginSummaryApi({
-      teamId,
-      period,
-      view: 'table',
-    });
-
-    const team = response.teams?.[0];
-    const trends = team?.trends || { margin: [], periods: [] };
-
-    // Limit the number of periods if needed
-    const limitedPeriods = trends.periods.slice(-limit);
-    const limitedMargins = trends.margin.slice(-limit);
-
-    return {
-      team,
-      trends: {
-        periods: limitedPeriods,
-        margins: limitedMargins
-      }
-    };
-  }
-
-  /**
-   * Get margin status distribution (convenience method)
-   */
-  async getMarginStatusDistribution(teamId?: number, yearMonth?: string): Promise<{
-    total: number;
-    distribution: {
-      status: MarginStatusType;
-      count: number;
-      percentage: number;
-    }[];
-  }> {
-    const response = await getEmployeeMarginsApi({
-      teamId,
-      yearMonth,
-      page: 1,
-      size: 1 // We only need the summary data
-    });
-
-    const { Red = 0, Yellow = 0, Green = 0 } = response.summary.statusCounts;
-    const total = Red + Yellow + Green;
-
-    return {
-      total,
-      distribution: [
-        { status: 'Red', count: Red, percentage: (Red / total) * 100 },
-        { status: 'Yellow', count: Yellow, percentage: (Yellow / total) * 100 },
-        { status: 'Green', count: Green, percentage: (Green / total) * 100 }
-      ]
-    };
-  }
 }
 
 // Create and export a singleton instance
