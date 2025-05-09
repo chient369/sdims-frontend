@@ -8,7 +8,6 @@
 
 import apiClient from '../../services/core/axios';
 import { AxiosRequestConfig } from 'axios';
-import { buildQueryParams, createFileUploadConfig } from '../../services/core/utils';
 import {
   // Employee types
   EmployeeListParams,
@@ -18,18 +17,27 @@ import {
   EmployeeStatusUpdateData,
   ImportEmployeesResponse,
   EmployeeProjectHistoryResponse,
+  EmployeeDeleteResponse,
+  EmployeeSuggestionsResponseWrapper,
+  PaginatedEmployeeResponse,
   
   // Skill types
   SkillCategoryResponse,
   SkillResponse,
   EmployeeSkillResponse,
+  EmployeeSkillsResponse,
+  EmployeeSkillsParams,
   EmployeeSkillCreateData,
+  EmployeeSkillDeleteResponse,
   
   // Team types
   TeamInfo,
   TeamCreateData,
   TeamUpdateData,
-  TeamMemberResponse
+  TeamMemberResponse,
+  
+  // Suggestion types
+  EmployeeSuggestParams
 } from './types';
 
 //-----------------------------------------------------------------------------
@@ -39,16 +47,8 @@ import {
 /**
  * Get employees with filtering and pagination
  */
-export const getEmployees = async (params?: EmployeeListParams, config?: AxiosRequestConfig): Promise<{
-  data: EmployeeResponse[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}> => {
-  return apiClient.get('/api/v1/hrm/employees', {
+export const getEmployees = async (params?: EmployeeListParams, config?: AxiosRequestConfig): Promise<PaginatedEmployeeResponse> => {
+  return apiClient.get('/api/v1/employees', {
     ...config,
     params
   });
@@ -58,28 +58,41 @@ export const getEmployees = async (params?: EmployeeListParams, config?: AxiosRe
  * Get employee by ID
  */
 export const getEmployeeById = async (id: string, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
-  return apiClient.get(`/api/v1/hrm/employees/${id}`, config);
+  return apiClient.get(`/api/v1/employees/${id}`, config);
+};
+
+/**
+ * Get employee by ID (alias for getEmployeeById for compatibility)
+ */
+export const getEmployee = async (id: number, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
+  return getEmployeeById(id.toString(), config);
 };
 
 /**
  * Create a new employee
  */
 export const createEmployee = async (data: EmployeeCreateData, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
-  return apiClient.post('/api/v1/hrm/employees', data, config);
+  return apiClient.post('/api/v1/employees', data, config);
 };
 
 /**
  * Update an employee
+ * Accepts either a string or number ID, and partial data for update
  */
-export const updateEmployee = async (id: string, data: EmployeeUpdateData, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
-  return apiClient.put(`/api/v1/hrm/employees/${id}`, data, config);
+export const updateEmployee = async (
+  id: string | number, 
+  data: EmployeeUpdateData | Partial<EmployeeCreateData>, 
+  config?: AxiosRequestConfig
+): Promise<EmployeeResponse> => {
+  const idString = typeof id === 'number' ? id.toString() : id;
+  return apiClient.put(`/api/v1/employees/${idString}`, data, config);
 };
 
 /**
  * Delete an employee
  */
-export const deleteEmployee = async (id: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/employees/${id}`, config);
+export const deleteEmployee = async (id: string, config?: AxiosRequestConfig): Promise<EmployeeDeleteResponse> => {
+  return apiClient.delete(`/api/v1/employees/${id}`, config);
 };
 
 /**
@@ -97,7 +110,7 @@ export const uploadAvatar = async (employeeId: string, file: File, config?: Axio
     }
   };
   
-  return apiClient.post(`/api/v1/hrm/employees/${employeeId}/avatar`, formData, axiosConfig);
+  return apiClient.post(`/api/v1/employees/${employeeId}/avatar`, formData, axiosConfig);
 };
 
 /**
@@ -109,7 +122,7 @@ export const getAvailableEmployees = async (params?: {
   skillIds?: string[];
   requiredUtilization?: number;
 }, config?: AxiosRequestConfig): Promise<EmployeeResponse[]> => {
-  return apiClient.get('/api/v1/hrm/employees/available', {
+  return apiClient.get('/api/v1/employees/available', {
     ...config,
     params
   });
@@ -118,13 +131,11 @@ export const getAvailableEmployees = async (params?: {
 /**
  * Suggest employees for project based on skills and availability
  */
-export const suggestEmployees = async (params: {
-  skillIds: string[];
-  startDate: string;
-  endDate?: string;
-  count?: number;
-}, config?: AxiosRequestConfig): Promise<EmployeeResponse[]> => {
-  return apiClient.get('/api/v1/hrm/employees/suggest', {
+export const suggestEmployees = async (
+  params: EmployeeSuggestParams, 
+  config?: AxiosRequestConfig
+): Promise<EmployeeSuggestionsResponseWrapper> => {
+  return apiClient.get('/api/v1/employees/search/suggest', {
     ...config,
     params
   });
@@ -145,7 +156,7 @@ export const importEmployees = async (file: File, config?: AxiosRequestConfig): 
     }
   };
   
-  return apiClient.post('/api/v1/hrm/employees/import', formData, axiosConfig);
+  return apiClient.post('/api/v1/employees/import', formData, axiosConfig);
 };
 
 /**
@@ -155,7 +166,7 @@ export const exportEmployees = async (params?: {
   format: 'csv' | 'excel';
   filters?: EmployeeListParams;
 }, config?: AxiosRequestConfig): Promise<Blob> => {
-  return apiClient.get('/api/v1/hrm/employees/export', {
+  return apiClient.get('/api/v1/employees/export', {
     ...config,
     params,
     responseType: 'blob'
@@ -170,7 +181,7 @@ export const updateEmployeeStatus = async (
   data: EmployeeStatusUpdateData,
   config?: AxiosRequestConfig
 ): Promise<EmployeeResponse> => {
-  return apiClient.put(`/api/v1/hrm/employees/${employeeId}/status`, data, config);
+  return apiClient.put(`/api/v1/employees/${employeeId}/status`, data, config);
 };
 
 /**
@@ -192,7 +203,7 @@ export const getEmployeeProjectHistory = async (
     totalPages: number;
   };
 }> => {
-  return apiClient.get(`/api/v1/hrm/employees/${employeeId}/project-history`, {
+  return apiClient.get(`/api/v1/employees/${employeeId}/project-history`, {
     ...config,
     params
   });
@@ -209,15 +220,15 @@ export const getSkillCategories = async (params?: {
   page?: number;
   limit?: number;
 }, config?: AxiosRequestConfig): Promise<{
-  data: SkillCategoryResponse[];
-  meta: {
+  content: SkillCategoryResponse[];
+  pageable: {
     total: number;
     page: number;
     limit: number;
     totalPages: number;
   };
 }> => {
-  return apiClient.get('/api/v1/hrm/skill-categories', {
+  return apiClient.get('/api/v1/skill-categories', {
     ...config,
     params
   });
@@ -230,7 +241,7 @@ export const createSkillCategory = async (data: {
   name: string;
   description?: string;
 }, config?: AxiosRequestConfig): Promise<SkillCategoryResponse> => {
-  return apiClient.post('/api/v1/hrm/skill-categories', data, config);
+  return apiClient.post('/api/v1/skill-categories', data, config);
 };
 
 /**
@@ -244,36 +255,42 @@ export const updateSkillCategory = async (
   },
   config?: AxiosRequestConfig
 ): Promise<SkillCategoryResponse> => {
-  return apiClient.put(`/api/v1/hrm/skill-categories/${categoryId}`, data, config);
+  return apiClient.put(`/api/v1/skill-categories/${categoryId}`, data, config);
 };
 
 /**
  * Delete a skill category
  */
 export const deleteSkillCategory = async (categoryId: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/skill-categories/${categoryId}`, config);
+  return apiClient.delete(`/api/v1/skill-categories/${categoryId}`, config);
 };
 
 /**
  * Get all skills or skills by category
  */
 export const getSkills = async (params?: {
-  categoryId?: string;
+  categoryId?: number | string;
   page?: number;
   limit?: number;
   keyword?: string;
 }, config?: AxiosRequestConfig): Promise<{
-  data: SkillResponse[];
-  meta: {
+  content: SkillResponse[];
+  pageable: {
     total: number;
     page: number;
     limit: number;
     totalPages: number;
   };
 }> => {
-  return apiClient.get('/api/v1/hrm/skills', {
+  // Ensure categoryId is a string if provided
+  const finalParams = params ? {
+    ...params,
+    categoryId: params.categoryId !== undefined ? params.categoryId.toString() : undefined
+  } : undefined;
+  
+  return apiClient.get('/api/v1/skills', {
     ...config,
-    params
+    params: finalParams
   });
 };
 
@@ -285,7 +302,7 @@ export const createSkill = async (data: {
   description?: string;
   categoryId: string;
 }, config?: AxiosRequestConfig): Promise<SkillResponse> => {
-  return apiClient.post('/api/v1/hrm/skills', data, config);
+  return apiClient.post('/api/v1/skills', data, config);
 };
 
 /**
@@ -300,46 +317,50 @@ export const updateSkill = async (
   },
   config?: AxiosRequestConfig
 ): Promise<SkillResponse> => {
-  return apiClient.put(`/api/v1/hrm/skills/${skillId}`, data, config);
+  return apiClient.put(`/api/v1/skills/${skillId}`, data, config);
 };
 
 /**
  * Delete a skill
  */
 export const deleteSkill = async (skillId: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/skills/${skillId}`, config);
+  return apiClient.delete(`/api/v1/skills/${skillId}`, config);
 };
 
 /**
- * Get employee skills
+ * Get all skills for an employee
  */
 export const getEmployeeSkills = async (
   employeeId: string,
+  params?: Omit<EmployeeSkillsParams, 'employeeId'>,
   config?: AxiosRequestConfig
-): Promise<EmployeeSkillResponse[]> => {
-  return apiClient.get(`/api/v1/hrm/employees/${employeeId}/skills`, config);
+): Promise<EmployeeSkillsResponse> => {
+  return apiClient.get(`/api/v1/employees/${employeeId}/skills`, {
+    ...config,
+    params
+  });
 };
 
 /**
- * Update employee skills
+ * Add or update a skill for an employee
  */
-export const updateEmployeeSkills = async (
+export const addOrUpdateEmployeeSkill = async (
   employeeId: string,
-  data: EmployeeSkillCreateData[],
+  data: EmployeeSkillCreateData,
   config?: AxiosRequestConfig
-): Promise<EmployeeSkillResponse[]> => {
-  return apiClient.put(`/api/v1/hrm/employees/${employeeId}/skills`, { skills: data }, config);
+): Promise<EmployeeSkillResponse> => {
+  return apiClient.post(`/api/v1/employees/${employeeId}/skills`, data, config);
 };
 
 /**
- * Delete an employee skill
+ * Delete a skill from an employee's profile
  */
 export const deleteEmployeeSkill = async (
   employeeId: string,
   skillId: string,
   config?: AxiosRequestConfig
-): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/employees/${employeeId}/skills/${skillId}`, config);
+): Promise<EmployeeSkillDeleteResponse> => {
+  return apiClient.delete(`/api/v1/employees/${employeeId}/skills/${skillId}`, config);
 };
 
 //-----------------------------------------------------------------------------
@@ -354,15 +375,15 @@ export const getTeams = async (params?: {
   limit?: number;
   keyword?: string;
 }, config?: AxiosRequestConfig): Promise<{
-  data: TeamInfo[];
-  meta: {
+  content: TeamInfo[];
+  pageable: {
     total: number;
     page: number;
     limit: number;
     totalPages: number;
   };
 }> => {
-  return apiClient.get('/api/v1/hrm/teams', {
+  return apiClient.get('/api/v1/teams', {
     ...config,
     params
   });
@@ -372,28 +393,28 @@ export const getTeams = async (params?: {
  * Get team by ID
  */
 export const getTeamById = async (id: string, config?: AxiosRequestConfig): Promise<TeamInfo> => {
-  return apiClient.get(`/api/v1/hrm/teams/${id}`, config);
+  return apiClient.get(`/api/v1/teams/${id}`, config);
 };
 
 /**
  * Create a new team
  */
 export const createTeam = async (data: TeamCreateData, config?: AxiosRequestConfig): Promise<TeamInfo> => {
-  return apiClient.post('/api/v1/hrm/teams', data, config);
+  return apiClient.post('/api/v1/teams', data, config);
 };
 
 /**
  * Update a team
  */
 export const updateTeam = async (id: string, data: TeamUpdateData, config?: AxiosRequestConfig): Promise<TeamInfo> => {
-  return apiClient.put(`/api/v1/hrm/teams/${id}`, data, config);
+  return apiClient.put(`/api/v1/teams/${id}`, data, config);
 };
 
 /**
  * Delete a team
  */
 export const deleteTeam = async (id: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/teams/${id}`, config);
+  return apiClient.delete(`/api/v1/teams/${id}`, config);
 };
 
 /**
@@ -415,7 +436,7 @@ export const getTeamMembers = async (
     totalPages: number;
   };
 }> => {
-  return apiClient.get(`/api/v1/hrm/teams/${teamId}/members`, {
+  return apiClient.get(`/api/v1/teams/${teamId}/members`, {
     ...config,
     params
   });
@@ -432,7 +453,7 @@ export const addTeamMember = async (
   },
   config?: AxiosRequestConfig
 ): Promise<TeamMemberResponse> => {
-  return apiClient.post(`/api/v1/hrm/teams/${teamId}/members`, data, config);
+  return apiClient.post(`/api/v1/teams/${teamId}/members`, data, config);
 };
 
 /**
@@ -443,7 +464,7 @@ export const removeTeamMember = async (
   employeeId: string,
   config?: AxiosRequestConfig
 ): Promise<void> => {
-  return apiClient.delete(`/api/v1/hrm/teams/${teamId}/members/${employeeId}`, config);
+  return apiClient.delete(`/api/v1/teams/${teamId}/members/${employeeId}`, config);
 };
 
 /**
@@ -456,5 +477,5 @@ export const setTeamLeader = async (
   },
   config?: AxiosRequestConfig
 ): Promise<TeamInfo> => {
-  return apiClient.put(`/api/v1/hrm/teams/${teamId}/leader`, data, config);
+  return apiClient.put(`/api/v1/teams/${teamId}/leader`, data, config);
 }; 
