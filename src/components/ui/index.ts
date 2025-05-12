@@ -9,4 +9,5 @@ export * from './Tooltip';
 export * from './Badge';
 export * from './Spinner';
 export * from './Card';
-export * from './Typography'; 
+export * from './Typography';
+export * from './Alert'; 

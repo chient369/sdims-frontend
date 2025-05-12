@@ -101,4 +101,12 @@ const Breadcrumb: React.FC = () => {
   );
 };
 
-export default Breadcrumb; 
+export default Breadcrumb;
+
+// Thêm định nghĩa BreadcrumbProps
+export interface BreadcrumbProps {
+  items: Array<{
+    label: string;
+    link: string;
+  }>;
+} 

@@ -90,7 +90,7 @@ export function Table<TData>({
   );
   
   return (
-    <div className="flex flex-col w-full">
+    <div className={cn("flex flex-col w-full h-full", className)}>
       {showToolbar && (
         <TableToolbar
           selectedCount={selectedRows}
@@ -99,15 +99,15 @@ export function Table<TData>({
         />
       )}
       
-      <div className={cn("relative overflow-x-auto border rounded-md", className)}>
+      <div className="relative overflow-auto flex-1 min-h-0">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10">
             <Spinner size="md" />
           </div>
         )}
         
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs uppercase text-gray-700 bg-gray-50 border-b">
+        <table className="w-full text-sm text-left min-w-max">
+          <thead className="text-xs uppercase text-gray-700 bg-gray-50 border-b sticky top-0 z-10">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
@@ -136,13 +136,13 @@ export function Table<TData>({
             ))}
           </thead>
           
-          <tbody>
+          <tbody className="divide-y divide-gray-200">
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map(row => (
                 <tr 
                   key={row.id}
                   className={cn(
-                    "border-b hover:bg-gray-50 transition-colors",
+                    "hover:bg-gray-50 transition-colors",
                     enableRowSelection && row.getIsSelected() && "bg-primary-50",
                     onRowClick && "cursor-pointer",
                     rowClassName && rowClassName(row.original)
@@ -170,7 +170,9 @@ export function Table<TData>({
         </table>
         
         {enablePagination && table.getRowModel().rows.length > 0 && (
-          <TablePagination table={table} />
+          <div className="border-t sticky bottom-0 bg-white w-full">
+            <TablePagination table={table} />
+          </div>
         )}
       </div>
     </div>
