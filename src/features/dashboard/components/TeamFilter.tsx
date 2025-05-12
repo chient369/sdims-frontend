@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import { Card, CardContent } from '@components/ui/Card';
 import { TeamInfo } from '../../hrm/types';
-import { employeeService } from '../../hrm/service';
 
 export interface TeamFilterProps {
   selectedTeamId: string | null;
@@ -58,7 +56,7 @@ const TeamFilter: React.FC<TeamFilterProps> = ({
   const userTeamId = user?.teamId;
   const visibleTeams = canViewAllTeams 
     ? teams 
-    : teams.filter(team => team.id === userTeamId);
+    : teams.filter(team => team.id.toString() === userTeamId);
 
   // Nếu user chỉ có quyền xem team của mình, tự động chọn team đó
   useEffect(() => {

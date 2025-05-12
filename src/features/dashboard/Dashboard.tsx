@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/Card';
 import { PermissionGuard } from '@components/ui';
@@ -16,6 +16,8 @@ import {
   DebtWidget
 } from './components';
 import { getDashboardSummary } from './api';
+import { getAvailableEmployees } from '../hrm/api';
+import { getUtilizationReport } from '../reports/api';
 import { DashboardSummary } from './types';
 import { useDashboardPermissions } from './hooks';
 
@@ -38,8 +40,14 @@ const Dashboard: React.FC = () => {
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingHR, setLoadingHR] = useState<boolean>(true);
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+  const [availableEmployees, setAvailableEmployees] = useState<any[]>([]);
+  const [endingSoonEmployees, setEndingSoonEmployees] = useState<any[]>([]);
+  const [utilizationRate, setUtilizationRate] = useState<number>(0);
+  const [utilizationChange, setUtilizationChange] = useState<number>(0);
   const [showAlert, setShowAlert] = useState<boolean>(true);
+
   const { 
     canViewEmployeeWidgets,
     canViewUtilizationWidget,
@@ -49,6 +57,118 @@ const Dashboard: React.FC = () => {
     canViewDebtWidget,
     canViewSalesFunnelWidget
   } = useDashboardPermissions();
+  
+  // Tải dữ liệu HR metrics
+  const fetchHRData = useCallback(async () => {
+    if (!canViewEmployeeWidgets() && !canViewUtilizationWidget()) {
+      return;
+    }
+    
+    setLoadingHR(true);
+    
+    try {
+      // Tải dữ liệu nhân viên sẵn sàng (bench)
+      if (canViewEmployeeWidgets()) {
+        const today = new Date();
+        const startDateStr = today.toISOString().split('T')[0];
+        
+        const availableData = await getAvailableEmployees({
+          startDate: startDateStr
+        });
+        
+        setAvailableEmployees(availableData || []);
+        
+        // Mock data cho nhân viên sắp hết dự án
+        const mockEndingSoon = [
+          {
+            id: '101',
+            fullName: 'Nguyễn Văn A',
+            teamName: 'Team Alpha',
+            projectEndDate: '2025-07-05'
+          },
+          {
+            id: '102',
+            fullName: 'Trần Thị B',
+            teamName: 'Team Beta',
+            projectEndDate: '2025-07-15'
+          },
+          {
+            id: '103',
+            fullName: 'Lê Văn C',
+            teamName: 'Team Alpha',
+            projectEndDate: '2025-07-22'
+          },
+          {
+            id: '104',
+            fullName: 'Phạm Thị D',
+            teamName: 'Team Gamma',
+            projectEndDate: '2025-07-28'
+          }
+        ];
+        
+        // Filter theo teamId nếu có
+        if (selectedTeamId) {
+          const filteredEndingSoon = mockEndingSoon.filter(emp => 
+            emp.teamName === (selectedTeamId === '1' ? 'Team Alpha' : 
+                            selectedTeamId === '2' ? 'Team Beta' : 
+                            selectedTeamId === '3' ? 'Team Gamma' : '')
+          );
+          setEndingSoonEmployees(filteredEndingSoon);
+        } else {
+          setEndingSoonEmployees(mockEndingSoon);
+        }
+      }
+      
+      // Tải dữ liệu utilization rate
+      if (canViewUtilizationWidget()) {
+        const today = new Date();
+        let fromDate = new Date(today);
+        
+        switch(timeframe) {
+          case 'week':
+            fromDate.setDate(today.getDate() - 7);
+            break;
+          case 'month':
+            fromDate.setMonth(today.getMonth() - 1);
+            break;
+          case 'quarter':
+            fromDate.setMonth(today.getMonth() - 3);
+            break;
+          case 'year':
+            fromDate.setFullYear(today.getFullYear() - 1);
+            break;
+        }
+        
+        const fromDateStr = fromDate.toISOString().split('T')[0];
+        const toDateStr = today.toISOString().split('T')[0];
+        
+        try {
+          const response = await getUtilizationReport({
+            fromDate: fromDateStr,
+            toDate: toDateStr,
+            teamId: selectedTeamId ? parseInt(selectedTeamId, 10) : undefined,
+            period: timeframe,
+          });
+          
+          // Nếu response là Blob, đó là export - chúng ta không xử lý
+          if (!(response instanceof Blob)) {
+            setUtilizationRate(response.summary.averageUtilization);
+            setUtilizationChange(5); // Mock data - thay đổi so với kỳ trước
+          }
+        } catch (error) {
+          console.error('Error fetching utilization data:', error);
+          
+          // Giá trị mặc định nếu API lỗi
+          setUtilizationRate(78);
+          setUtilizationChange(2);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching HR data:', error);
+    } finally {
+      setLoadingHR(false);
+    }
+  }, [canViewEmployeeWidgets, canViewUtilizationWidget, selectedTeamId, timeframe]);
   
   // Load dashboard data khi timeframe hoặc selectedTeamId thay đổi
   useEffect(() => {
@@ -70,7 +190,8 @@ const Dashboard: React.FC = () => {
     };
     
     fetchDashboardData();
-  }, [timeframe, selectedTeamId]);
+    fetchHRData();
+  }, [timeframe, selectedTeamId, fetchHRData]);
   
   const handleTimeframeChange = (newTimeframe: 'week' | 'month' | 'quarter' | 'year') => {
     setTimeframe(newTimeframe);
@@ -105,23 +226,41 @@ const Dashboard: React.FC = () => {
     }
   }, []);
   
+  // Chuẩn bị dữ liệu cho các widget
+  const employeeAvailableData = {
+    totalEmployees: availableEmployees?.length || 0,
+    change: 3, // Mock data - thay đổi so với kỳ trước
+    periodLabel: timeframe === 'week' ? 'tuần trước' : 
+                timeframe === 'month' ? 'tháng trước' : 
+                timeframe === 'quarter' ? 'quý trước' : 'năm trước'
+  };
+  
+  const employeeEndingSoonData = {
+    totalEmployees: endingSoonEmployees?.length || 0,
+    change: -2, // Mock data - thay đổi so với kỳ trước
+    periodLabel: timeframe === 'week' ? 'tuần trước' : 
+                timeframe === 'month' ? 'tháng trước' : 
+                timeframe === 'quarter' ? 'quý trước' : 'năm trước',
+    employees: endingSoonEmployees?.map(emp => ({
+      id: emp.id,
+      name: emp.fullName,
+      projectEndDate: emp.projectEndDate
+    }))
+  };
+  
+  const utilizationRateData = {
+    rate: utilizationRate,
+    change: utilizationChange,
+    periodLabel: timeframe === 'week' ? 'tuần trước' : 
+                timeframe === 'month' ? 'tháng trước' : 
+                timeframe === 'quarter' ? 'quý trước' : 'năm trước'
+  };
+  
   // Mock data khi chưa có data thật
   const mockData = {
-    employeeAvailable: {
-      totalEmployees: 12,
-      change: 3,
-      periodLabel: 'tuần trước'
-    },
-    employeeEndingSoon: {
-      totalEmployees: 8,
-      change: -2,
-      periodLabel: 'tuần trước'
-    },
-    utilizationRate: {
-      rate: 78,
-      change: 5,
-      periodLabel: 'tuần trước'
-    },
+    employeeAvailable: employeeAvailableData,
+    employeeEndingSoon: employeeEndingSoonData,
+    utilizationRate: utilizationRateData,
     marginDistribution: {
       distribution: {
         green: { count: 60, percentage: 60 },
@@ -209,7 +348,7 @@ const Dashboard: React.FC = () => {
           {canViewEmployeeWidgets() ? (
             <EmployeeAvailableWidget 
               data={mockData.employeeAvailable}
-              loading={loading}
+              loading={loadingHR}
             />
           ) : (
             <WidgetFallback title="Nhân sự Sẵn sàng" />
@@ -219,7 +358,7 @@ const Dashboard: React.FC = () => {
           {canViewEmployeeWidgets() ? (
             <EmployeeEndingSoonWidget
               data={mockData.employeeEndingSoon}
-              loading={loading}
+              loading={loadingHR}
             />
           ) : (
             <WidgetFallback title="Nhân sự Sắp hết Dự án" />
@@ -229,7 +368,7 @@ const Dashboard: React.FC = () => {
           {canViewUtilizationWidget() ? (
             <UtilizationRateWidget
               data={mockData.utilizationRate}
-              loading={loading}
+              loading={loadingHR}
             />
           ) : (
             <WidgetFallback title="Tỷ lệ Sử dụng Nguồn lực" />
