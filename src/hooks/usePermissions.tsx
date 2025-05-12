@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
  * @returns Object with permission checking functions and user data
  */
 export function usePermissions() {
-  const { state, hasPermission, hasAnyPermission, hasAllPermissions } = useAuth();
+  const { state, hasPermission, hasAnyPermission, hasAllPermission } = useAuth();
   const { user } = state;
 
   // Single permission check
@@ -20,23 +20,45 @@ export function usePermissions() {
 
   // Check if user has all of the given permissions
   const canAll = (requiredPermissions: string[]): boolean => {
-    return hasAllPermissions(requiredPermissions);
+    return hasAllPermission(requiredPermissions);
   };
 
   // Check if user has a specific role
   const is = (role: string): boolean => {
-    return user?.role === role;
+    if (!user?.role) return false;
+    
+    if (Array.isArray(user.role)) {
+      return user.role.some(r => typeof r === 'string' && r === role);
+    }
+    
+    return user.role === role;
   };
 
   // Check if user has any of the given roles
   const isAny = (requiredRoles: string[]): boolean => {
-    return !!user?.role && requiredRoles.includes(user.role);
+    if (!user?.role) return false;
+    
+    if (Array.isArray(user.role)) {
+      return user.role.some(r => 
+        typeof r === 'string' && requiredRoles.includes(r)
+      );
+    }
+    
+    return requiredRoles.includes(user.role);
   };
 
   // Check if user has a set of roles (not usually applicable in most RBAC systems)
   const isAllRoles = (requiredRoles: string[]): boolean => {
+    if (!user?.role) return false;
+    
+    if (Array.isArray(user.role)) {
+      return requiredRoles.every(role => 
+        user.role.includes(role)
+      );
+    }
+    
     // In most systems, a user has only one role, so this is primarily for compatibility
-    return !!user?.role && requiredRoles.every(role => user.role === role);
+    return requiredRoles.every(role => user.role === role);
   };
 
   return {

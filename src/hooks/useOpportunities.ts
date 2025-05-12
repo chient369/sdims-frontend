@@ -14,7 +14,9 @@ import * as opportunityApi from '../features/opportunities/api';
 export function useOpportunities(params?: OpportunityListParams) {
   return useQuery({
     queryKey: ['opportunities', params],
-    queryFn: () => opportunityApi.getOpportunities(params)
+    queryFn: () => opportunityApi.getOpportunities(params),
+    retry: false,
+    refetchOnWindowFocus: false
   });
 }
 
@@ -23,7 +25,9 @@ export function useOpportunity(id: number | undefined, params?: { includeNotes?:
   return useQuery({
     queryKey: ['opportunity', id, params],
     queryFn: () => (id ? opportunityApi.getOpportunityById(id.toString(), { params }) : Promise.reject('No ID provided')),
-    enabled: !!id // Only run the query if we have an ID
+    enabled: !!id, // Only run the query if we have an ID
+    retry: false,
+    refetchOnWindowFocus: false
   });
 }
 

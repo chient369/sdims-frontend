@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '../features/auth/types';
 import * as permissionUtils from '../utils/permissions';
+import { authService } from '../features/auth/service';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -19,20 +20,18 @@ export const useAuth = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('access_token');
+        // Sử dụng authService để kiểm tra xác thực
+        const isAuthenticated = authService.isAuthenticated();
+        const user = authService.getCurrentUser();
         
-        if (!token) {
-          setState({ isAuthenticated: false, user: null, loading: false });
-          return;
-        }
-        
-        // Here you would typically verify the token with your API
-        // For now, we'll simulate this by checking if the token exists
         setState({
-          isAuthenticated: true,
-          user: JSON.parse(localStorage.getItem('user') || 'null'),
+          isAuthenticated,
+          user,
           loading: false,
         });
+
+        // Log thông tin để debug
+        console.log('Auth state loaded:', { isAuthenticated, user });
       } catch (error) {
         console.error('Auth check error:', error);
         setState({ isAuthenticated: false, user: null, loading: false });
@@ -43,44 +42,14 @@ export const useAuth = () => {
   }, []);
 
   // Login function
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, remember = false) => {
     try {
-      // Here you would call your API to login
-      // This is a placeholder for demonstration
-      const user: User = {
-        id: '1',
-        username: email.split('@')[0],
-        email,
-        firstName: 'Test',
-        lastName: 'User',
-        fullName: 'Test User',
-        role: 'admin',
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        permissions: [
-          'dashboard:read:all',
-          'employee:read:all',
-          'employee:update:all',
-          'employee-skill:read:all',
-          'margin:read:all',
-          'opportunity:read:all',
-          'opportunity:update:all',
-          'contract:read:all',
-          'report:read:all',
-          'config:read'
-        ],
-      };
-      
-      const token = 'fake-jwt-token';
-      
-      // Store auth data in localStorage
-      localStorage.setItem('access_token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      // Sử dụng authService để đăng nhập
+      const response = await authService.login(email, password, remember);
       
       setState({
         isAuthenticated: true,
-        user,
+        user: response.user,
         loading: false,
       });
       
@@ -92,14 +61,17 @@ export const useAuth = () => {
   }, []);
 
   // Logout function
-  const logout = useCallback(() => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    setState({
-      isAuthenticated: false,
-      user: null,
-      loading: false,
-    });
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+      setState({
+        isAuthenticated: false,
+        user: null,
+        loading: false,
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   }, []);
 
   // Check if user has a specific permission
@@ -144,6 +116,8 @@ export const useAuth = () => {
     hasPermissions,
     hasAnyPermission,
     getAccessScope,
+    // Expose permissions directly
+    permissions: state.user?.permissions || []
   };
 };
 
