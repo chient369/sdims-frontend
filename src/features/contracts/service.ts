@@ -1,40 +1,33 @@
 import { BaseApiService } from '../../services/core/baseApi';
-import apiClient from '../../services/core/axios';
+import api from '../../services/core/axios';
 
 // Import types từ types.ts 
 import {
   ContractCreateData,
-  ContractEmployeeCreateData,
-  ContractEmployeeResponse,
-  ContractFileResponse,
   ContractListParams,
-  ContractResponse,
   ContractUpdateData,
+  PaymentTermCreateData,
+  PaymentStatusUpdateData,
+  EmployeeAssignmentCreateData,
+  BulkEmployeeAssignmentData,
+  ContractListResponse,
+  ContractDetailResponse,
+  ContractDetail,
+  ContractSummary,
+  PaymentTerm,
+  EmployeeAssignment,
+  ContractFile,
   ImportPaymentStatusResponse,
-  PaymentScheduleCreateData,
-  PaymentScheduleItem,
-  PaymentStatusUpdateData
+  KpiListParams,
+  KpiFormData,
+  SalesKpi,
+  KpiListResponse,
+  KpiSaveResponse,
+  KpiDeleteResponse
 } from './types';
 
 // Import API functions từ api.ts
-import {
-  assignEmployeeToContract as assignEmployeeToContractApi,
-  deleteContractFile as deleteContractFileApi,
-  getContractEmployees as getContractEmployeesApi,
-  getContractFiles as getContractFilesApi,
-  getContractKPIs as getContractKPIsApi,
-  getContractSummaryByStatus as getContractSummaryByStatusApi,
-  getContracts as getContractsApi,
-  getPaymentSchedule as getPaymentScheduleApi,
-  getPaymentStatusTemplate as getPaymentStatusTemplateApi,
-  getPaymentSummary as getPaymentSummaryApi,
-  getRevenueForecast as getRevenueForecastApi,
-  importPaymentStatus as importPaymentStatusApi,
-  markPaymentAsPaid as markPaymentAsPaidApi,
-  removeEmployeeFromContract as removeEmployeeFromContractApi,
-  updatePaymentStatus as updatePaymentStatusApi,
-  uploadContractFile as uploadContractFileApi,
-} from './api';
+import * as contractApi from './api';
 
 /**
  * Service class for contract management
@@ -51,37 +44,29 @@ class ContractService extends BaseApiService {
   /**
    * Get all contracts with filtering and pagination
    */
-  async getContracts(params?: ContractListParams): Promise<{
-    data: ContractResponse[];
-    meta: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-  }> {
-    return getContractsApi(params);
+  async getContracts(params?: ContractListParams): Promise<ContractListResponse> {
+    return contractApi.getContracts(params);
   }
 
   /**
    * Get contract by ID
    */
-  async getContractById(id: string): Promise<ContractResponse> {
-    return this.getById<ContractResponse>(id);
+  async getContractById(id: string): Promise<ContractDetailResponse> {
+    return contractApi.getContractById(id);
   }
 
   /**
    * Create a new contract
    */
-  async createContract(data: ContractCreateData): Promise<ContractResponse> {
-    return this.create<ContractResponse, ContractCreateData>(data);
+  async createContract(data: ContractCreateData): Promise<ContractDetail> {
+    return contractApi.createContract(data);
   }
 
   /**
    * Update a contract
    */
-  async updateContract(id: string, data: ContractUpdateData): Promise<ContractResponse> {
-    return this.update<ContractResponse, ContractUpdateData>(id, data);
+  async updateContract(id: string, data: ContractUpdateData): Promise<ContractDetail> {
+    return contractApi.updateContract(id, data);
   }
 
   /**
@@ -97,31 +82,32 @@ class ContractService extends BaseApiService {
   async uploadContractFile(
     contractId: string, 
     file: File, 
-    fileCategory: 'contract' | 'invoice' | 'proposal' | 'attachment' | 'other',
-    description?: string
-  ): Promise<ContractFileResponse> {
-    return uploadContractFileApi(contractId, file, fileCategory, description);
+    fileCategory: string,
+  ): Promise<ContractFile> {
+    return contractApi.uploadContractFile(contractId, file, fileCategory);
   }
 
   /**
    * Get contract files
    */
-  async getContractFiles(contractId: string): Promise<ContractFileResponse[]> {
-    return getContractFilesApi(contractId);
+  async getContractFiles(contractId: string): Promise<ContractFile[]> {
+    const response = await api.get(`${this.endpoint}/${contractId}/files`);
+    return response.data;
   }
 
   /**
    * Delete contract file
    */
   async deleteContractFile(fileId: string): Promise<void> {
-    return deleteContractFileApi(fileId);
+    return this.delete(`/files/${fileId}`);
   }
   
   /**
    * Get payment schedule for contract
    */
-  async getPaymentSchedule(contractId: string): Promise<PaymentScheduleItem[]> {
-    return getPaymentScheduleApi(contractId);
+  async getPaymentSchedule(contractId: string): Promise<PaymentTerm[]> {
+    const response = await api.get(`${this.endpoint}/${contractId}/payment-terms`);
+    return response.data;
   }
   
   /**
@@ -129,12 +115,9 @@ class ContractService extends BaseApiService {
    */
   async addPaymentScheduleItem(
     contractId: string,
-    data: PaymentScheduleCreateData
-  ): Promise<PaymentScheduleItem> {
-    return apiClient.post<PaymentScheduleItem, PaymentScheduleItem>(
-      `${this.endpoint}/${contractId}/payment-terms`,
-      data
-    );
+    data: PaymentTermCreateData
+  ): Promise<PaymentTerm> {
+    return contractApi.addPaymentTerm(contractId, data);
   }
   
   /**
@@ -143,22 +126,23 @@ class ContractService extends BaseApiService {
   async updatePaymentScheduleItem(
     contractId: string,
     paymentId: string,
-    data: Partial<PaymentScheduleCreateData>
-  ): Promise<PaymentScheduleItem> {
-    return apiClient.put<PaymentScheduleItem, PaymentScheduleItem>(
+    data: Partial<PaymentTermCreateData>
+  ): Promise<PaymentTerm> {
+    return api.put<PaymentTerm, PaymentTerm>(
       `${this.endpoint}/${contractId}/payment-terms/${paymentId}`,
       data
     );
   }
   
   /**
-   * Update payment status
+   * Update payment status for a term
    */
-  async updatePaymentStatus(
+  async updateTermPaymentStatus(
+    contractId: string,
     termId: string,
     data: PaymentStatusUpdateData
-  ): Promise<PaymentScheduleItem> {
-    return updatePaymentStatusApi(termId, data);
+  ): Promise<PaymentTerm> {
+    return contractApi.updatePaymentStatus(contractId, termId, data);
   }
 
   /**
@@ -167,15 +151,27 @@ class ContractService extends BaseApiService {
   async importPaymentStatus(
     file: File,
     notifyOwners?: boolean
-  ): Promise<ImportPaymentStatusResponse> {
-    return importPaymentStatusApi(file, notifyOwners);
+  ): Promise<ImportPaymentStatusResponse> { 
+    const formData = new FormData();
+    formData.append('file', file);
+    if (notifyOwners !== undefined) {
+      formData.append('notifyOwners', notifyOwners.toString());
+    }
+    
+    const response = await api.post(`${this.endpoint}/import-payment-status`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
   }
 
   /**
    * Get payment status export template
    */
   async getPaymentStatusTemplate(): Promise<Blob> {
-    return getPaymentStatusTemplateApi();
+    const response = await api.get(`${this.endpoint}/payment-status-template`, {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 
   /**
@@ -189,8 +185,12 @@ class ContractService extends BaseApiService {
       paidAmount: number;
       paymentMethod?: string;
     }
-  ): Promise<PaymentScheduleItem> {
-    return markPaymentAsPaidApi(contractId, paymentId, data);
+  ): Promise<PaymentTerm> {
+    const response = await api.put(
+      `${this.endpoint}/${contractId}/payment-terms/${paymentId}/mark-as-paid`,
+      data
+    );
+    return response.data;
   }
   
   /**
@@ -201,7 +201,8 @@ class ContractService extends BaseApiService {
     count: number;
     totalValue: number;
   }>> {
-    return getContractSummaryByStatusApi();
+    const response = await api.get(`${this.endpoint}/summary-by-status`);
+    return response.data;
   }
   
   /**
@@ -219,14 +220,15 @@ class ContractService extends BaseApiService {
     paidCount: number;
     overdueCount: number;
   }> {
-    return getPaymentSummaryApi(params);
+    const response = await api.get(`${this.endpoint}/payment-summary`, { params });
+    return response.data;
   }
 
   /**
    * Get employees assigned to a contract
    */
-  async getContractEmployees(contractId: string): Promise<ContractEmployeeResponse[]> {
-    return getContractEmployeesApi(contractId);
+  async getContractEmployees(contractId: string): Promise<EmployeeAssignment[]> {
+    return contractApi.getContractEmployees(contractId);
   }
 
   /**
@@ -234,9 +236,9 @@ class ContractService extends BaseApiService {
    */
   async assignEmployeeToContract(
     contractId: string,
-    data: ContractEmployeeCreateData
-  ): Promise<ContractEmployeeResponse> {
-    return assignEmployeeToContractApi(contractId, data);
+    data: EmployeeAssignmentCreateData
+  ): Promise<EmployeeAssignment> {
+    return contractApi.assignEmployeeToContract(contractId, data);
   }
 
   /**
@@ -246,7 +248,18 @@ class ContractService extends BaseApiService {
     contractId: string,
     employeeId: string
   ): Promise<void> {
-    return removeEmployeeFromContractApi(contractId, employeeId);
+    return contractApi.removeEmployeeFromContract(contractId, employeeId);
+  }
+
+  /**
+   * Assign multiple employees to a contract at once following API-CTR-013
+   */
+  async assignEmployeesToContract(
+    contractId: string,
+    data: BulkEmployeeAssignmentData
+  ): Promise<EmployeeAssignment[]> {
+    const response = await api.post(`${this.endpoint}/${contractId}/employees/bulk`, data);
+    return response.data;
   }
 
   /**
@@ -262,7 +275,8 @@ class ContractService extends BaseApiService {
     expected: number;
     actual: number;
   }>> {
-    return getRevenueForecastApi(params);
+    const response = await api.get(`${this.endpoint}/revenue-forecast`, { params });
+    return response.data;
   }
 
   /**
@@ -284,9 +298,54 @@ class ContractService extends BaseApiService {
       totalValue: number;
     }>;
   }> {
-    return getContractKPIsApi(params);
+    const response = await api.get(`${this.endpoint}/kpis`, { params });
+    return response.data;
   }
 }
 
-// Create and export an instance
-export const contractService = new ContractService(); 
+export default ContractService;
+
+/**
+ * Lấy danh sách KPI doanh thu với các tham số lọc
+ * @param params Tham số lọc và phân trang
+ * @returns Promise với danh sách KPI đã lọc
+ */
+export const getSalesKpis = async (params?: KpiListParams): Promise<KpiListResponse> => {
+  try {
+    const response = await contractApi.getSalesKpis(params);
+    return response;
+  } catch (error) {
+    console.error('Error fetching sales KPIs:', error);
+    throw error;
+  }
+};
+
+/**
+ * Thêm mới hoặc cập nhật KPI doanh thu
+ * @param data Dữ liệu KPI cần lưu
+ * @returns Promise với kết quả lưu KPI
+ */
+export const saveSalesKpi = async (data: KpiFormData): Promise<KpiSaveResponse> => {
+  try {
+    const response = await contractApi.saveSalesKpi(data);
+    return response;
+  } catch (error) {
+    console.error('Error saving sales KPI:', error);
+    throw error;
+  }
+};
+
+/**
+ * Xóa một KPI doanh thu
+ * @param kpiId ID của KPI cần xóa
+ * @returns Promise với kết quả xóa KPI
+ */
+export const deleteSalesKpi = async (kpiId: number): Promise<KpiDeleteResponse> => {
+  try {
+    const response = await contractApi.deleteSalesKpi(kpiId);
+    return response;
+  } catch (error) {
+    console.error('Error deleting sales KPI:', error);
+    throw error;
+  }
+}; 

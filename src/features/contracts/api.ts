@@ -9,314 +9,235 @@
  * business operations and additional logic when needed.
  */
 
-import apiClient from '../../services/core/axios';
-import { AxiosRequestConfig } from 'axios';
-import { ContractListParams, ContractResponse, ContractCreateData, ContractUpdateData, ContractFileResponse, PaymentScheduleItem, PaymentStatusUpdateData, ImportPaymentStatusResponse, ContractEmployeeResponse, ContractEmployeeCreateData, PaymentScheduleCreateData } from './types';
+import axios from 'axios';
+import { 
+  ContractListParams, 
+  ContractSummary, 
+  ContractDetail,
+  ContractCreateData,
+  ContractUpdateData,
+  PaymentTermCreateData,
+  PaymentStatusUpdateData,
+  EmployeeAssignmentCreateData,
+  BulkEmployeeAssignmentData,
+  ContractListResponse,
+  ContractDetailResponse,
+  KpiListParams,
+  KpiFormData
+} from './types';
+import { contractDetailMock } from './mocks/contractDetailMock';
 
+// Tạo instance Axios với cấu hình cơ bản
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Thêm interceptor để thêm token xác thực
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Sử dụng mock data
+const USE_MOCK = true;
+
+// Các hàm API cho module Contract
 
 /**
- * Get all contracts with filtering and pagination
+ * Lấy danh sách hợp đồng với bộ lọc và phân trang
+ * @param params Tham số lọc và phân trang
+ * @returns Promise<ContractListResponse>
  */
-export const getContracts = async (params?: ContractListParams, config?: AxiosRequestConfig): Promise<{
-  data: ContractResponse[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}> => {
-  return apiClient.get('/api/v1/contracts', { 
-    ...config,
-    params,
-  });
+export const getContracts = async (params?: ContractListParams): Promise<ContractListResponse> => {
+  const response = await apiClient.get('/contracts', { params });
+  return response.data;
 };
 
 /**
- * Get contract by ID
+ * Lấy chi tiết hợp đồng theo ID
+ * @param id ID hợp đồng
+ * @returns Promise<ContractDetailResponse>
  */
-export const getContractById = async (id: string, config?: AxiosRequestConfig): Promise<ContractResponse> => {
-  return apiClient.get(`/api/v1/contracts/${id}`, config);
-};
-
-/**
- * Create a new contract
- */
-export const createContract = async (data: ContractCreateData, config?: AxiosRequestConfig): Promise<ContractResponse> => {
-  return apiClient.post('/api/v1/contracts', data, config);
-};
-
-/**
- * Update a contract
- */
-export const updateContract = async (id: string, data: ContractUpdateData, config?: AxiosRequestConfig): Promise<ContractResponse> => {
-  return apiClient.put(`/api/v1/contracts/${id}`, data, config);
-};
-
-/**
- * Delete a contract
- */
-export const deleteContract = async (id: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.delete(`/api/v1/contracts/${id}`, config);
-};
-
-/**
- * Upload contract file
- */
-export const uploadContractFile = async (
-  contractId: string, 
-  file: File, 
-  fileCategory: 'contract' | 'invoice' | 'proposal' | 'attachment' | 'other', 
-  description?: string,
-  config?: AxiosRequestConfig
-): Promise<ContractFileResponse> => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('fileCategory', fileCategory);
-  if (description) {
-    formData.append('description', description);
+export const getContractById = async (id: string): Promise<ContractDetailResponse> => {
+  if (USE_MOCK) {
+    // Trả về dữ liệu mock
+    return Promise.resolve(contractDetailMock);
   }
   
-  return apiClient.post(
-    `/api/v1/contracts/${contractId}/files`, 
-    formData,
-    {
-      ...config,
-      headers: {
-        ...config?.headers,
-        'Content-Type': 'multipart/form-data'
-      }
-    }
-  );
+  // Gọi API thực
+  const response = await apiClient.get(`/contracts/${id}`);
+  return response.data;
 };
 
 /**
- * Get contract files
+ * Tạo hợp đồng mới
+ * @param data Dữ liệu hợp đồng mới
+ * @returns Promise với đối tượng hợp đồng đã tạo
  */
-export const getContractFiles = async (
-  contractId: string, 
-  config?: AxiosRequestConfig
-): Promise<ContractFileResponse[]> => {
-  return apiClient.get(`/api/v1/contracts/${contractId}/files`, config);
+export const createContract = async (data: ContractCreateData) => {
+  const response = await apiClient.post('/contracts', data);
+  return response.data;
 };
 
 /**
- * Delete contract file
+ * Cập nhật hợp đồng
+ * @param id ID hợp đồng
+ * @param data Dữ liệu cần cập nhật
+ * @returns Promise với đối tượng hợp đồng đã cập nhật
  */
-export const deleteContractFile = async (
-  fileId: string,
-  config?: AxiosRequestConfig
-): Promise<void> => {
-  return apiClient.delete(`/api/v1/contracts/files/${fileId}`, config);
+export const updateContract = async (id: string, data: ContractUpdateData) => {
+  const response = await apiClient.put(`/contracts/${id}`, data);
+  return response.data;
 };
 
 /**
- * Get payment schedule for contract
+ * Lấy danh sách nhân viên được phân công vào hợp đồng
+ * @param contractId ID hợp đồng
+ * @returns Promise với danh sách nhân viên
  */
-export const getPaymentSchedule = async (contractId: string, config?: AxiosRequestConfig): Promise<PaymentScheduleItem[]> => {
-  return apiClient.get(`/api/v1/contracts/${contractId}/payment-terms`, config);
+export const getContractEmployees = async (contractId: string) => {
+  const response = await apiClient.get(`/contracts/${contractId}/employees`);
+  return response.data;
 };
 
 /**
- * Add payment schedule item
+ * Phân công nhân viên vào hợp đồng
+ * @param contractId ID hợp đồng
+ * @param data Dữ liệu phân công
+ * @returns Promise với kết quả phân công
  */
-export const addPaymentScheduleItem = async (
-  contractId: string,
-  data: PaymentScheduleCreateData,
-  config?: AxiosRequestConfig
-): Promise<PaymentScheduleItem> => {
-  return apiClient.post(`/api/v1/contracts/${contractId}/payment-terms`, data, config);
+export const assignEmployeeToContract = async (contractId: string, data: EmployeeAssignmentCreateData) => {
+  const response = await apiClient.post(`/contracts/${contractId}/employees`, data);
+  return response.data;
 };
 
 /**
- * Update payment schedule item
+ * Phân công nhiều nhân viên vào hợp đồng
+ * @param contractId ID hợp đồng
+ * @param data Dữ liệu phân công hàng loạt
+ * @returns Promise với kết quả phân công
  */
-export const updatePaymentScheduleItem = async (
-  contractId: string,
-  paymentId: string,
-  data: Partial<PaymentScheduleCreateData>,
-  config?: AxiosRequestConfig
-): Promise<PaymentScheduleItem> => {
-  return apiClient.put(`/api/v1/contracts/${contractId}/payment-terms/${paymentId}`, data, config);
+export const assignEmployeesToContract = async (contractId: string, data: BulkEmployeeAssignmentData) => {
+  const response = await apiClient.post(`/contracts/${contractId}/employees/bulk`, data);
+  return response.data;
 };
 
 /**
- * Update payment status
+ * Xóa nhân viên khỏi hợp đồng
+ * @param contractId ID hợp đồng
+ * @param employeeId ID nhân viên
+ * @returns Promise với kết quả xóa
  */
-export const updatePaymentStatus = async (
-  termId: string,
-  data: PaymentStatusUpdateData,
-  config?: AxiosRequestConfig
-): Promise<PaymentScheduleItem> => {
-  return apiClient.patch(`/api/v1/contracts/payment-terms/${termId}/status`, data, config);
+export const removeEmployeeFromContract = async (contractId: string, employeeId: string) => {
+  const response = await apiClient.delete(`/contracts/${contractId}/employees/${employeeId}`);
+  return response.data;
 };
 
 /**
- * Import payment status from file
+ * Thêm đợt thanh toán cho hợp đồng
+ * @param contractId ID hợp đồng
+ * @param data Dữ liệu đợt thanh toán
+ * @returns Promise với kết quả tạo đợt thanh toán
  */
-export const importPaymentStatus = async (
-  file: File,
-  notifyOwners?: boolean,
-  config?: AxiosRequestConfig
-): Promise<ImportPaymentStatusResponse> => {
+export const addPaymentTerm = async (contractId: string, data: PaymentTermCreateData) => {
+  const response = await apiClient.post(`/contracts/${contractId}/payment-terms`, data);
+  return response.data;
+};
+
+/**
+ * Cập nhật trạng thái thanh toán
+ * @param contractId ID hợp đồng
+ * @param termId ID đợt thanh toán
+ * @param data Dữ liệu cập nhật trạng thái
+ * @returns Promise với kết quả cập nhật
+ */
+export const updatePaymentStatus = async (contractId: string, termId: string, data: PaymentStatusUpdateData) => {
+  const response = await apiClient.put(`/contracts/${contractId}/payment-terms/${termId}/status`, data);
+  return response.data;
+};
+
+/**
+ * Tải lên file đính kèm cho hợp đồng
+ * @param contractId ID hợp đồng
+ * @param file File cần tải lên
+ * @param type Loại file
+ * @returns Promise với kết quả tải lên
+ */
+export const uploadContractFile = async (contractId: string, file: File, type: string) => {
   const formData = new FormData();
   formData.append('file', file);
-  if (notifyOwners !== undefined) {
-    formData.append('notifyOwners', String(notifyOwners));
+  formData.append('type', type);
+
+  const response = await apiClient.post(`/contracts/${contractId}/files`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
+/**
+ * Lấy danh sách KPI doanh thu với các tham số lọc
+ * @param params Tham số lọc và phân trang
+ * @returns Promise<KpiListResponse>
+ */
+export const getSalesKpis = async (params?: KpiListParams) => {
+  const response = await apiClient.get('/sales-kpis', { params });
+  return response.data;
+};
+
+/**
+ * Thêm mới hoặc cập nhật KPI doanh thu
+ * @param data Dữ liệu KPI cần lưu
+ * @returns Promise với kết quả lưu KPI
+ */
+export const saveSalesKpi = async (data: KpiFormData) => {
+  // Nếu có id, đây là cập nhật
+  if (data.id) {
+    const response = await apiClient.put(`/admin/sales-kpis/${data.id}`, data);
+    return response.data;
   }
   
-  return apiClient.post(
-    `/api/v1/contracts/payment-terms/import-status`, 
-    formData,
-    {
-      ...config,
-      headers: {
-        ...config?.headers,
-        'Content-Type': 'multipart/form-data'
-      }
-    }
-  );
+  // Nếu không có id, đây là thêm mới
+  const response = await apiClient.post('/admin/sales-kpis', data);
+  return response.data;
 };
 
 /**
- * Get payment status export template
+ * Xóa một KPI doanh thu
+ * @param kpiId ID của KPI cần xóa
+ * @returns Promise với kết quả xóa KPI
  */
-export const getPaymentStatusTemplate = async (config?: AxiosRequestConfig): Promise<Blob> => {
-  return apiClient.get('/api/v1/contracts/payment-terms/export-template', {
-    ...config,
-    responseType: 'blob'
-  });
+export const deleteSalesKpi = async (kpiId: number) => {
+  const response = await apiClient.delete(`/admin/sales-kpis/${kpiId}`);
+  return response.data;
 };
 
-/**
- * Mark payment as paid
- */
-export const markPaymentAsPaid = async (
-  contractId: string,
-  paymentId: string,
-  data: {
-    paidDate: string;
-    paidAmount: number;
-    paymentMethod?: string;
-  },
-  config?: AxiosRequestConfig
-): Promise<PaymentScheduleItem> => {
-  return apiClient.patch(`/api/v1/contracts/${contractId}/payments/${paymentId}/paid`, data, config);
-};
-
-/**
- * Get contract summary by status
- */
-export const getContractSummaryByStatus = async (config?: AxiosRequestConfig): Promise<Array<{
-  status: string;
-  count: number;
-  totalValue: number;
-}>> => {
-  return apiClient.get('/api/v1/contracts/summary/status', config);
-};
-
-/**
- * Get payment summary
- */
-export const getPaymentSummary = async (
-  params?: {
-    year?: number;
-    month?: number;
-    clientId?: string;
-  },
-  config?: AxiosRequestConfig
-): Promise<{
-  totalDue: number;
-  totalPaid: number;
-  totalOverdue: number;
-  dueCount: number;
-  paidCount: number;
-  overdueCount: number;
-}> => {
-  return apiClient.get('/api/v1/contracts/summary/payments', {
-    ...config,
-    params,
-  });
-};
-
-/**
- * Get employees assigned to a contract
- */
-export const getContractEmployees = async (
-  contractId: string,
-  config?: AxiosRequestConfig
-): Promise<ContractEmployeeResponse[]> => {
-  return apiClient.get(`/api/v1/contracts/${contractId}/employees`, config);
-};
-
-/**
- * Assign employee to a contract
- */
-export const assignEmployeeToContract = async (
-  contractId: string,
-  data: ContractEmployeeCreateData,
-  config?: AxiosRequestConfig
-): Promise<ContractEmployeeResponse> => {
-  return apiClient.post(`/api/v1/contracts/${contractId}/employees`, data, config);
-};
-
-/**
- * Remove employee from a contract
- */
-export const removeEmployeeFromContract = async (
-  contractId: string,
-  employeeId: string,
-  config?: AxiosRequestConfig
-): Promise<void> => {
-  return apiClient.delete(`/api/v1/contracts/${contractId}/employees/${employeeId}`, config);
-};
-
-/**
- * Get revenue forecast by contract
- */
-export const getRevenueForecast = async (
-  params?: {
-    year?: number;
-    month?: number;
-    contractId?: string;
-    clientId?: string;
-  },
-  config?: AxiosRequestConfig
-): Promise<Array<{
-  month: string;
-  expected: number;
-  actual: number;
-}>> => {
-  return apiClient.get('/api/v1/contracts/forecast/revenue', {
-    ...config,
-    params,
-  });
-};
-
-/**
- * Get contract KPIs
- */
-export const getContractKPIs = async (
-  params?: {
-    year?: number;
-    quarter?: number;
-  },
-  config?: AxiosRequestConfig
-): Promise<{
-  totalContracts: number;
-  activeContracts: number;
-  newContractsThisPeriod: number;
-  totalContractValue: number;
-  averageContractValue: number;
-  topClients: Array<{
-    clientId: string;
-    clientName: string;
-    contractCount: number;
-    totalValue: number;
-  }>;
-}> => {
-  return apiClient.get('/api/v1/contracts/kpi', {
-    ...config,
-    params,
-  });
+// Export tất cả các API functions
+export default {
+  getContracts,
+  getContractById,
+  createContract,
+  updateContract,
+  getContractEmployees,
+  assignEmployeeToContract,
+  assignEmployeesToContract,
+  removeEmployeeFromContract,
+  addPaymentTerm,
+  updatePaymentStatus,
+  uploadContractFile,
+  getSalesKpis,
+  saveSalesKpi,
+  deleteSalesKpi
 };

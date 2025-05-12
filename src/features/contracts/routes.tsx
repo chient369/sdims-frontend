@@ -1,76 +1,70 @@
-// import { lazy } from 'react';
-// import { Navigate } from 'react-router-dom';
-// import { PrivateRoute } from '../auth/routes';
+import { lazy } from 'react';
+import { PrivateRoute } from '../auth/routes';
 
-// // Lazy loaded components
-// const ContractList = lazy(() => import('./pages/ContractList'));
-// const ContractDetail = lazy(() => import('./pages/ContractDetail'));
-// const ContractForm = lazy(() => import('./pages/ContractForm'));
-// const PaymentStatus = lazy(() => import('./pages/PaymentStatus'));
-// const RevenueKPI = lazy(() => import('./pages/RevenueKPI'));
+// Lazy load các components để tối ưu hiệu suất
+const ContractList = lazy(() => import('./pages/ContractList'));
+const ContractDetail = lazy(() => import('./pages/ContractDetail'));
+const ContractForm = lazy(() => import('./pages/ContractForm'));
+const PaymentStatusUpdate = lazy(() => import('./pages/PaymentStatusUpdate'));
+const KpiManagement = lazy(() => import('./pages/KpiManagement'));
 
-// // Define contract routes
-// export const ContractRoutes = [
-//   {
-//     path: "/contracts",
-//     element: <Navigate to="/contracts/list" replace />
-//   },
-//   {
-//     path: "/contracts/list",
-//     element: (
-//       <PrivateRoute requiredPermissions={['view_contracts']}>
-//         <ContractList />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/:id",
-//     element: (
-//       <PrivateRoute requiredPermissions={['view_contracts']}>
-//         <ContractDetail />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/new",
-//     element: (
-//       <PrivateRoute requiredPermissions={['manage_contracts']}>
-//         <ContractForm />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/:id/edit",
-//     element: (
-//       <PrivateRoute requiredPermissions={['manage_contracts']}>
-//         <ContractForm />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/payments",
-//     element: (
-//       <PrivateRoute requiredPermissions={['manage_payments']}>
-//         <PaymentStatus />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/kpi",
-//     element: (
-//       <PrivateRoute requiredPermissions={['view_revenue_kpi']}>
-//         <RevenueKPI />
-//       </PrivateRoute>
-//     )
-//   },
-//   {
-//     path: "/contracts/*",
-//     element: <Navigate to="/contracts/list" replace />
-//   }
-// ]; 
-
-import React from 'react';
-
-// Temporary empty export to fix the import error
-// To be replaced with actual routes when contracts feature is fully implemented
-export const ContractRoutes = []; 
+/**
+ * Routes cho module Contract
+ * Định nghĩa các đường dẫn và quyền truy cập tương ứng
+ */
+export const ContractRoutes = [
+  // Danh sách hợp đồng
+  {
+    path: "/contracts",
+    element: (
+      <PrivateRoute requiredPermissions={['contract:read:all']}>
+        <ContractList />
+      </PrivateRoute>
+    )
+  },
+  // Tạo mới hợp đồng
+  {
+    path: "/contracts/create",
+    element: (
+      <PrivateRoute requiredPermissions={['contract:create']}>
+        <ContractForm />
+      </PrivateRoute>
+    )
+  },
+  // Chỉnh sửa hợp đồng
+  {
+    path: "/contracts/edit/:id",
+    element: (
+      <PrivateRoute requiredPermissions={['contract:update:all']}>
+        <ContractForm />
+      </PrivateRoute>
+    )
+  },
+  // Chi tiết hợp đồng
+  {
+    path: "/contracts/:id",
+    element: (
+      <PrivateRoute requiredPermissions={['contract:read:all']}>
+        <ContractDetail />
+      </PrivateRoute>
+    )
+  },
+  // Cập nhật trạng thái thanh toán
+  {
+    path: "/contracts/payment-updates",
+    element: (
+      <PrivateRoute requiredPermissions={['payment-status:update:all']}>
+        <PaymentStatusUpdate />
+      </PrivateRoute>
+    )
+  },
+  // Quản lý KPI doanh thu
+  {
+    path: "/contracts/kpi-management",
+    element: (
+      <PrivateRoute requiredPermissions={['sales-kpi:read:all']}>
+        <KpiManagement />
+      </PrivateRoute>
+    )
+  }
+]; 
