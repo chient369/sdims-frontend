@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -14,20 +15,59 @@ interface SidebarProps {
  * @returns {JSX.Element} The rendered sidebar component
  */
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
-  // For a real app, you would get these from an authentication/authorization context
-  const userPermissions = ['dashboard.access', 'hrm.access', 'margins.access', 'contracts.access', 'opportunities.access'];
+  // Lấy thông tin quyền từ AuthContext
+  const { state, hasPermission: checkPermission } = useAuth();
+  const userPermissions = state.userProfile?.permissions || state.user?.permissions || [];
+  
+  // State theo dõi kết quả kiểm tra quyền cho từng menu item
+  const [permissionResults, setPermissionResults] = useState<Record<string, boolean>>({});
 
   const menuItems = [
-    { name: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', path: '/dashboard', permission: 'dashboard.access' },
-    { name: 'Human Resources', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', path: '/hrm', permission: 'hrm.access' },
-    { name: 'Margin Management', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', path: '/margins', permission: 'margins.access' },
-    { name: 'Contracts', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', path: '/contracts', permission: 'contracts.access' },
-    { name: 'Opportunities', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', path: '/opportunities', permission: 'opportunities.access' },
+    { name: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', path: '/dashboard', permission: 'dashboard' },
+    { name: 'Human Resources', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', path: '/hrm', permission: 'employee' },
+    { name: 'Margin Management', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', path: '/margins', permission: 'margin' },
+    { name: 'Contracts', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', path: '/contracts', permission: 'contract' },
+    { name: 'Opportunities', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', path: '/opportunities', permission: 'opportunity' },
+    { name: 'Reports', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', path: '/reports', permission: 'report' },
+    { name: 'Settings', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', path: '/settings', permission: 'config' },
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    userPermissions.includes(item.permission)
-  );
+  /**
+   * Kiểm tra người dùng có quyền truy cập menu item hay không
+   * @param {string} resource - Resource cần kiểm tra quyền
+   * @returns {boolean} - Kết quả kiểm tra quyền
+   */
+  const hasPermission = (resource: string): boolean => {
+    // Kiểm tra xem người dùng có bất kỳ quyền nào liên quan đến resource này không
+    return userPermissions.some(permission => {
+      // Kiểm tra quyền bắt đầu bằng resource
+      return permission.startsWith(`${resource}:`);
+    });
+  };
+
+  // Kiểm tra quyền cho tất cả menu items và lưu kết quả
+  useEffect(() => {
+    const results: Record<string, boolean> = {};
+    
+    menuItems.forEach(item => {
+      results[item.name] = hasPermission(item.permission);
+      
+      // In ra thông tin chi tiết để debug
+      console.log(`Menu item: ${item.name}, Permission: ${item.permission}, Has Access: ${results[item.name]}`);
+      
+      // Lọc quyền liên quan đến resource này để debug
+      const relatedPermissions = userPermissions.filter(p => p.startsWith(`${item.permission}:`));
+      console.log(`Related permissions for ${item.name}:`, relatedPermissions);
+    });
+    
+    setPermissionResults(results);
+    
+    // Log tổng hợp kết quả
+    console.log('Permission check results:', results);
+  }, [userPermissions]);
+
+  // Lọc menu items dựa trên quyền
+  const filteredMenuItems = menuItems.filter(item => hasPermission(item.permission));
 
   return (
     <div 

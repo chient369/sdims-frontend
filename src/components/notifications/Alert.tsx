@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   CheckCircleIcon,
   XCircleIcon,
-  ExclamationTriangleIcon,
+  ExclaimationTriangleIcon,
   InformationCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -44,7 +44,7 @@ export const Alert: React.FC<AlertProps> = ({
       case 'error':
         return <XCircleIcon className="h-5 w-5 text-red-500" />;
       case 'warning':
-        return <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />;
+        return <ExclaimationTriangleIcon className="h-5 w-5 text-yellow-500" />;
       case 'info':
         return <InformationCircleIcon className="h-5 w-5 text-blue-500" />;
     }
