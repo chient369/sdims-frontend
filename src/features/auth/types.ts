@@ -8,12 +8,40 @@ export interface User {
   firstName?: string;
   lastName?: string;
   fullName?: string;
-  role: string;
+  teamId?: string;
+  teams?: Array<{
+    id: string;
+    name: string;
+  }>;
+  role: string | string[];
   permissions?: string[];
   isActive: boolean;
   lastLogin?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Extended user information from /api/v1/auth/me endpoint
+ */
+export interface UserProfile {
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    fullname: string;
+    avatar?: string;
+    role: string | string[];
+    employee_id?: number;
+    created_at: string;
+    last_login?: string;
+  };
+  permissions: string[];
+  settings: {
+    notification_enabled: boolean;
+    theme: 'light' | 'dark';
+    language: 'vi' | 'en' | 'ja';
+  };
 }
 
 /**

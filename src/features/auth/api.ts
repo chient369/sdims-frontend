@@ -1,6 +1,6 @@
 import apiClient from '../../services/core/axios';
 import { AxiosRequestConfig } from 'axios';
-import { LoginCredentials, AuthResponse, RefreshTokenRequest } from './types';
+import { LoginCredentials, AuthResponse, RefreshTokenRequest, UserProfile } from './types';
 
 /**
  * API function to authenticate a user
@@ -17,11 +17,34 @@ export const login = async (credentials: LoginCredentials, config?: AxiosRequest
 };
 
 /**
+ * API function to get the current user's profile and permissions
+ * @returns Promise containing the user profile with detailed information
+ */
+export const getUserProfile = async (config?: AxiosRequestConfig): Promise<UserProfile> => {
+  const response = await apiClient.get('/api/v1/auth/me', config);
+  // API returns { status, code, data } structure where data contains our actual profile data
+  if (response?.data?.status === 'success' && response.data.data) {
+    return response.data.data;
+  }
+  return response.data;
+};
+
+/**
  * API function to log out a user
  * @returns Promise that resolves when logout is successful
  */
 export const logout = async (config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.post('/api/v1/auth/logout', {}, config);
+  try {
+    console.log('API: Sending logout request to server');
+    await apiClient.post('/api/v1/auth/logout', {}, config);
+    console.log('API: Logout response received successfully');
+    return;
+  } catch (error) {
+    console.error('API: Error during logout request:', error);
+    // Still want to complete logout on client side even if server request fails
+    // So we'll resolve the promise rather than rejecting it
+    return Promise.resolve();
+  }
 };
 
 /**
