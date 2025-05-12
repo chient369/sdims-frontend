@@ -12,7 +12,7 @@ export const routePaths = {
     base: '/hrm',
     employees: '/hrm/employees',
     employeeDetail: (id: string) => `/hrm/employees/${id}`,
-    newEmployee: '/hrm/employees/new',
+    newEmployee: '/hrm/employees/create',
     editEmployee: (id: string) => `/hrm/employees/${id}/edit`,
     skills: '/hrm/skills',
   },
