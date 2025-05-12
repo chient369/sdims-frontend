@@ -102,6 +102,9 @@ export interface OpportunityNoteResponse {
 export interface OpportunityNoteCreateData {
   content: string;
   attachments?: File[];
+  type?: string;
+  tags?: string[];
+  isInteraction?: boolean;
 }
 
 /**
@@ -122,4 +125,32 @@ export interface SyncLogResponse {
     id: string;
     name: string;
   };
+}
+
+/**
+ * Opportunity attachment structure
+ */
+export interface OpportunityAttachment {
+  id: string;
+  opportunityId: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    name: string;
+  };
+  downloadUrl: string;
+  thumbnailUrl?: string;
+}
+
+/**
+ * Data for opportunity attachments operations
+ */
+export interface OpportunityAttachmentListParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 } 

@@ -1,6 +1,6 @@
 import apiClient from '../../services/core/axios';
 import { AxiosRequestConfig } from 'axios';
-import { buildQueryParams, createFileUploadConfig } from '../../services/core/utils';
+import { buildQueryParams } from '../../services/core/utils';
 import { 
   OpportunityListParams, 
   OpportunityResponse, 
@@ -8,7 +8,9 @@ import {
   OpportunityUpdateData,
   OpportunityNoteResponse,
   OpportunityNoteCreateData,
-  SyncLogResponse
+  SyncLogResponse,
+  OpportunityAttachment,
+  OpportunityAttachmentListParams
 } from './types';
 
 /**
@@ -131,22 +133,47 @@ export const addOpportunityNote = async (
     const formData = new FormData();
     formData.append('content', data.content);
     
+    // Add new fields to formData if they exist
+    if (data.type) {
+      formData.append('type', data.type);
+    }
+    
+    if (data.tags && data.tags.length > 0) {
+      data.tags.forEach(tag => {
+        formData.append('tags[]', tag);
+      });
+    }
+    
+    if (data.isInteraction !== undefined) {
+      formData.append('isInteraction', data.isInteraction.toString());
+    }
+    
     data.attachments.forEach((file: File) => {
       formData.append('attachments', file);
     });
     
-    const uploadConfig = createFileUploadConfig(config);
-    
     return apiClient.post(
       `/api/v1/opportunities/${opportunityId}/notes`, 
       formData,
-      uploadConfig
+      {
+        ...config,
+        headers: {
+          ...(config?.headers || {}),
+          'Content-Type': 'multipart/form-data',
+        }
+      }
     );
   }
   
+  // No attachments, send regular JSON
   return apiClient.post(
     `/api/v1/opportunities/${opportunityId}/notes`, 
-    { content: data.content },
+    {
+      content: data.content,
+      type: data.type,
+      tags: data.tags,
+      isInteraction: data.isInteraction
+    },
     config
   );
 };
@@ -188,4 +215,67 @@ export const updateOnsitePriority = async (
   config?: AxiosRequestConfig
 ): Promise<OpportunityResponse> => {
   return apiClient.put(`/api/v1/opportunities/${opportunityId}/onsite-priority`, data, config);
+};
+
+/**
+ * Get files attached to an opportunity
+ */
+export const getOpportunityAttachments = async (
+  opportunityId: string,
+  params?: OpportunityAttachmentListParams,
+  config?: AxiosRequestConfig
+): Promise<{
+  data: OpportunityAttachment[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}> => {
+  return apiClient.get(`/api/v1/opportunities/${opportunityId}/files`, {
+    ...config,
+    params
+  });
+};
+
+/**
+ * Upload files to an opportunity
+ */
+export const uploadOpportunityFiles = async (
+  opportunityId: string,
+  files: File[],
+  config?: AxiosRequestConfig
+): Promise<OpportunityAttachment[]> => {
+  const formData = new FormData();
+  
+  files.forEach((file) => {
+    formData.append('files', file);
+  });
+  
+  return apiClient.post(
+    `/api/v1/opportunities/${opportunityId}/files`,
+    formData,
+    {
+      ...config,
+      headers: {
+        ...(config?.headers || {}),
+        'Content-Type': 'multipart/form-data',
+      }
+    }
+  );
+};
+
+/**
+ * Delete a file attached to an opportunity
+ */
+export const deleteOpportunityFile = async (
+  opportunityId: string,
+  fileId: string,
+  config?: AxiosRequestConfig
+): Promise<void> => {
+  return apiClient.delete(
+    `/api/v1/opportunities/${opportunityId}/files/${fileId}`,
+    config
+  );
 }; 

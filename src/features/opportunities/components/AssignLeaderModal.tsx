@@ -1,35 +1,36 @@
 /**
  * AssignLeaderModal component for assigning leader to an opportunity
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { assignLeaderToOpportunity } from '../api';
 
-interface AssignLeaderModalProps {
+export interface AssignLeaderModalProps {
   opportunityId: string;
-  opportunityName: string;
-  isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
-  leaders?: { id: string; name: string }[];
+  onAssign: (leaderId: string, message?: string) => Promise<void>;
+  opportunityName?: string;
 }
+
+// Mock data for leaders - in a real app, this would come from API
+const MOCK_LEADERS = [
+  { id: '1', name: 'Nguyễn Văn A' },
+  { id: '2', name: 'Trần Thị B' },
+  { id: '3', name: 'Lê Văn C' }
+];
 
 const AssignLeaderModal: React.FC<AssignLeaderModalProps> = ({
   opportunityId,
-  opportunityName,
-  isOpen,
+  opportunityName = 'Cơ hội',
   onClose,
-  onSuccess,
-  leaders = []
+  onAssign
 }) => {
   const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [notifyLeader, setNotifyLeader] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  if (!isOpen) return null;
   
   const handleAssign = async () => {
     if (!selectedLeaderId) {
@@ -41,14 +42,7 @@ const AssignLeaderModal: React.FC<AssignLeaderModalProps> = ({
       setIsSubmitting(true);
       setError(null);
       
-      await assignLeaderToOpportunity(opportunityId, {
-        leaderId: selectedLeaderId,
-        message,
-        notifyLeader
-      });
-      
-      onSuccess();
-      onClose();
+      await onAssign(selectedLeaderId, message);
     } catch (err) {
       setError('Có lỗi xảy ra khi phân công Leader. Vui lòng thử lại sau.');
       console.error('Error assigning leader:', err);
@@ -80,7 +74,7 @@ const AssignLeaderModal: React.FC<AssignLeaderModalProps> = ({
               className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="">-- Chọn Leader --</option>
-              {leaders.map((leader) => (
+              {MOCK_LEADERS.map((leader) => (
                 <option key={leader.id} value={leader.id}>
                   {leader.name}
                 </option>
