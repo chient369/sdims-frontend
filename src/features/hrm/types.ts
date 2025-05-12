@@ -520,7 +520,7 @@ export interface EmployeeSkillDeleteResponse {
  * Team data structure
  */
 export interface TeamInfo {
-  id: number;
+  id: number | string;
   name: string;
   description?: string;
   leaderId?: number;

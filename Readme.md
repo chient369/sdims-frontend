@@ -44,11 +44,17 @@ npm run dev
 src/
   assets/           # Static assets (images, fonts, etc.)
   components/       # Shared components
-    ui/             # Base UI components
+    ui/             # Base UI components (Button, Input, Alert, Badge, etc.)
     layout/         # Layout components
     forms/          # Form-related components
-    tables/         # Table-related components
+    table/          # Table-related components
     modals/         # Modal-related components
+    navigation/     # Navigation components
+    notifications/  # Notification components
+    files/          # File handling components
+    charts/         # Chart and data visualization components
+    auth/           # Authentication specific components
+    examples/       # Example components for reference
   features/         # Feature-based modules
     auth/           # Authentication related
     dashboard/      # Dashboard related
@@ -58,7 +64,15 @@ src/
     opportunities/  # Opportunity Management
     admin/          # Admin features
     reports/        # Reporting features
+    errors/         # Error handling features
   hooks/            # Custom hooks
+    useAuth.ts
+    useClickOutside.ts
+    useEmployees.ts
+    useEscapeKey.ts
+    useModalState.ts
+    useOpportunities.ts
+    usePermissions.tsx
   context/          # React context definitions
   services/         # API services
     core/           # Core service utilities
@@ -71,11 +85,36 @@ src/
   types/            # TypeScript type definitions
   config/           # Application configuration
   routes/           # Routing definitions
+  store/            # State management (likely Zustand)
+  providers/        # Provider components
+  pages/            # Top-level pages
+  tests/            # Test utilities and fixtures
+```
+
+## UI Components
+
+The application includes the following UI components in `src/components/ui/`:
+
+```
+Alert.tsx          # Notification and alert components
+Badge.tsx          # Badge indicators
+Button.tsx         # Button components with various styles
+Card.tsx           # Card container components
+ErrorBoundary.tsx  # Error handling component
+Input.tsx          # Form input components
+LoadingFallback.tsx# Loading indicator component
+Logo.tsx           # Application logo component
+PermissionGuard.tsx# Permission-based access control
+Progress.tsx       # Progress indicator
+ResourceGuard.tsx  # Resource-based access control
+Spinner.tsx        # Loading spinner
+ThemeToggle.tsx    # Theme switching component
+Typography.tsx     # Text styling components
 ```
 
 ## Feature Architecture
 
-Each feature module in the `features` directory now follows a consistent architecture pattern:
+Each feature module in the `features` directory follows a consistent architecture pattern:
 
 ```
 features/[feature]/
@@ -89,6 +128,20 @@ features/[feature]/
     [...].tsx       # Other pages
   components/       # Feature-specific components
 ```
+
+### Current Features
+
+The application currently includes the following features:
+
+- **auth/** - User authentication and authorization
+- **admin/** - Administrative functionality
+- **dashboard/** - Main dashboard and analytics
+- **hrm/** - Human Resource Management
+- **contracts/** - Contract Management
+- **margin/** - Margin Management
+- **opportunities/** - Opportunity Management
+- **reports/** - Reporting and analytics
+- **errors/** - Error handling and display
 
 ### Feature Structure Details
 
@@ -192,6 +245,18 @@ export const FeatureRoutes = [
 ];
 ```
 
+## Custom Hooks
+
+The application includes several custom hooks for common functionality:
+
+- **useAuth.ts** - Authentication functionality
+- **useClickOutside.ts** - Detect clicks outside an element
+- **useEmployees.ts** - Employee data management
+- **useEscapeKey.ts** - Handle escape key presses
+- **useModalState.ts** - Manage modal state
+- **useOpportunities.ts** - Opportunity data management
+- **usePermissions.tsx** - Permission and access control
+
 ## Implementing New Features
 
 When implementing a new feature, follow these steps:
@@ -284,3 +349,76 @@ When implementing a new feature, follow these steps:
 - **Date Handling**: date-fns
 - **Validation**: Zod
 - **Testing**: Vitest, React Testing Library
+
+## Quy ước sử dụng Service trong dự án
+
+### Cấu trúc Chuẩn
+
+Dự án SDIMS sử dụng mô hình kiến trúc nhiều lớp để tương tác với API. Quy ước này giúp đảm bảo tính nhất quán và dễ bảo trì trong toàn bộ codebase.
+
+```
+src/
+├── features/                # Modules theo tính năng
+│   └── [feature]/
+│       ├── api.ts           # API calls trực tiếp 
+│       ├── service.ts       # Business logic layer
+│       ├── hooks/
+│       │   └── useServices.ts # Custom hooks cho services
+│       └── components/      # React components
+└── services/
+    └── core/                # Core API services
+        ├── axios.ts         # Axios instance & interceptors
+        └── baseApi.ts       # Base API service class
+```
+
+### Quy tắc Chuẩn hóa
+
+1. **Không sử dụng API trực tiếp từ components**
+   - ❌ `import { getEmployees } from '../../api'`
+   - ✅ `import { useEmployeeService } from '../../hooks/useServices'`
+
+2. **Sử dụng custom hooks để truy cập services**
+   ```jsx
+   const MyComponent = () => {
+     const employeeService = useEmployeeService();
+     
+     // Sử dụng service
+     const { data } = useQuery({
+       queryKey: ['employees'],
+       queryFn: () => employeeService.getEmployees()
+     });
+     
+     // ...
+   }
+   ```
+
+3. **Chuẩn hóa tất cả imports qua index files**
+   ```jsx
+   // Thay vì
+   import { useEmployeeService } from '../../hooks/useServices';
+   
+   // Sử dụng
+   import { useEmployeeService } from 'hooks';
+   ```
+
+### Lợi ích
+
+1. **Tách biệt Concerns**
+   - Components chỉ quan tâm về UI/UX
+   - Services xử lý business logic
+   - API layer chỉ tập trung vào giao tiếp HTTP
+
+2. **Dễ dàng Refactor và Test**
+   - Mock services thay vì mock API calls
+   - Thay đổi implementation của services mà không ảnh hưởng tới components
+
+3. **Code nhất quán**
+   - Dễ đọc hơn cho team members
+   - Onboarding nhanh hơn cho developers mới
+
+### Ví dụ Triển khai
+
+Xem các file mẫu:
+- `src/features/hrm/service.ts`
+- `src/features/hrm/hooks/useServices.ts`
+- `src/features/hrm/components/EmployeeForm/EmployeeForm.tsx`

@@ -1,50 +1,50 @@
 /**
  * Định dạng số thành định dạng tiền tệ
  * @param value Giá trị cần định dạng
+ * @param locale Locale để định dạng (mặc định: vi-VN)
  * @param currency Đơn vị tiền tệ (mặc định: VND)
- * @returns Chuỗi đã định dạng theo tiền tệ
+ * @returns Chuỗi đã định dạng
  */
-export const formatCurrency = (value: number, currency: string = 'VND'): string => {
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+export const formatCurrency = (value: number, locale = 'vi-VN', currency = 'VND'): string => {
+  if (isNaN(value)) return '0 ₫';
   
-  return formatter.format(value);
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0
+  }).format(value);
 };
 
 /**
  * Định dạng ngày tháng từ string ISO thành định dạng dễ đọc
- * @param dateString Chuỗi ngày tháng dạng ISO
- * @param includeTime Có hiển thị thời gian hay không
- * @returns Chuỗi ngày tháng đã định dạng (DD/MM/YYYY)
+ * @param dateStr Chuỗi ngày đầu vào (định dạng: YYYY-MM-DD)
+ * @returns Chuỗi ngày đã định dạng
  */
-export const formatDate = (dateString: string, includeTime: boolean = false): string => {
-  if (!dateString) return '';
+export const formatDate = (dateStr: string): string => {
+  if (!dateStr) return '';
   
-  const date = new Date(dateString);
-  
-  if (isNaN(date.getTime())) return '';
-  
-  const options: Intl.DateTimeFormatOptions = {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {})
-  };
-  
-  return new Intl.DateTimeFormat('vi-VN', options).format(date);
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch (error) {
+    return dateStr;
+  }
 };
 
 /**
  * Định dạng phần trăm
- * @param value Giá trị cần định dạng
- * @returns Chuỗi đã định dạng theo phần trăm
+ * @param value Giá trị phần trăm cần format
+ * @param decimals Số chữ số thập phân (mặc định: 2)
+ * @returns Chuỗi đã định dạng
  */
-export const formatPercent = (value: number): string => {
-  return `${Math.round(value)}%`;
+export const formatPercent = (value: number, decimals = 2): string => {
+  if (isNaN(value)) return '0%';
+  
+  return `${value.toFixed(decimals)}%`;
 };
 
 /**
@@ -76,4 +76,4 @@ export const formatFileSize = (bytes: number, decimals: number = 1): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-};
+}; 
