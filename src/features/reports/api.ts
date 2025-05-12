@@ -10,10 +10,6 @@ import apiClient from '../../services/core/axios';
 import { AxiosRequestConfig } from 'axios';
 
 import {
-  // Dashboard Types
-  DashboardParams,
-  DashboardSummaryResponse,
-  
   // Employee Report Types
   EmployeeReportParams,
   EmployeeReportResponse,
@@ -44,19 +40,6 @@ import {
 } from './types';
 
 /**
- * Get dashboard summary data
- */
-export const getDashboardSummary = async (
-  params?: DashboardParams,
-  config?: AxiosRequestConfig
-): Promise<DashboardSummaryResponse> => {
-  return apiClient.get('/api/v1/dashboard/summary', {
-    ...config,
-    params,
-  });
-};
-
-/**
  * Get employee report data
  */
 export const getEmployeeReport = async (
@@ -65,21 +48,21 @@ export const getEmployeeReport = async (
 ): Promise<EmployeeReportResponse | Blob> => {
   // If export type is excel or csv, return a Blob instead of JSON
   if (params?.exportType && params.exportType !== 'json') {
-    return apiClient.get('/api/v1/reports/employees', {
+    return apiClient.get('/api/v1/reports/employee-list', {
       ...config,
       params,
       responseType: 'blob'
     });
   }
   
-  return apiClient.get('/api/v1/reports/employees', {
+  return apiClient.get('/api/v1/reports/employee-list', {
     ...config,
     params,
   });
 };
 
 /**
- * Get margin report data
+ * Get margin detail report data
  */
 export const getMarginReport = async (
   params?: MarginReportParams,
@@ -87,14 +70,14 @@ export const getMarginReport = async (
 ): Promise<MarginReportResponse | Blob> => {
   // If export type is excel or csv, return a Blob instead of JSON
   if (params?.exportType && params.exportType !== 'json') {
-    return apiClient.get('/api/v1/reports/margins', {
+    return apiClient.get('/api/v1/reports/margin-detail', {
       ...config,
       params,
       responseType: 'blob'
     });
   }
   
-  return apiClient.get('/api/v1/reports/margins', {
+  return apiClient.get('/api/v1/reports/margin-detail', {
     ...config,
     params,
   });
@@ -109,14 +92,14 @@ export const getOpportunityReport = async (
 ): Promise<OpportunityReportResponse | Blob> => {
   // If export type is excel or csv, return a Blob instead of JSON
   if (params?.exportType && params.exportType !== 'json') {
-    return apiClient.get('/api/v1/reports/opportunities', {
+    return apiClient.get('/api/v1/reports/opportunity-list', {
       ...config,
       params,
       responseType: 'blob'
     });
   }
   
-  return apiClient.get('/api/v1/reports/opportunities', {
+  return apiClient.get('/api/v1/reports/opportunity-list', {
     ...config,
     params,
   });
@@ -131,21 +114,21 @@ export const getContractReport = async (
 ): Promise<ContractReportResponse | Blob> => {
   // If export type is excel or csv, return a Blob instead of JSON
   if (params?.exportType && params.exportType !== 'json') {
-    return apiClient.get('/api/v1/reports/contracts', {
+    return apiClient.get('/api/v1/reports/contract-list', {
       ...config,
       params,
       responseType: 'blob'
     });
   }
   
-  return apiClient.get('/api/v1/reports/contracts', {
+  return apiClient.get('/api/v1/reports/contract-list', {
     ...config,
     params,
   });
 };
 
 /**
- * Get payment report data
+ * Get payment status report data
  */
 export const getPaymentReport = async (
   params?: PaymentReportParams,
@@ -153,14 +136,14 @@ export const getPaymentReport = async (
 ): Promise<PaymentReportResponse | Blob> => {
   // If export type is excel or csv, return a Blob instead of JSON
   if (params?.exportType && params.exportType !== 'json') {
-    return apiClient.get('/api/v1/reports/payments', {
+    return apiClient.get('/api/v1/reports/payment-status', {
       ...config,
       params,
       responseType: 'blob'
     });
   }
   
-  return apiClient.get('/api/v1/reports/payments', {
+  return apiClient.get('/api/v1/reports/payment-status', {
     ...config,
     params,
   });

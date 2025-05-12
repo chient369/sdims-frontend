@@ -162,27 +162,6 @@ export interface EmployeeReportItem {
   nonBillableHours: number;
 }
 
-/**
- * Employee report response data
- */
-export interface EmployeeReportResponse {
-  summary: {
-    totalEmployees: number;
-    activeEmployees: number;
-    averageUtilization: number;
-    totalBillableHours: number;
-    totalNonBillableHours: number;
-  };
-  content: EmployeeReportItem[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
-}
-
 //-----------------------------------------------------------------------------
 // Margin Report Types
 //-----------------------------------------------------------------------------
@@ -255,33 +234,6 @@ export interface TeamMarginItem {
     percentage: number;
   }[];
   periods: ReportMarginPeriodData[];
-}
-
-/**
- * Margin report response data
- */
-export interface MarginReportResponse {
-  summary: {
-    totalTeams?: number;
-    totalEmployees: number;
-    averageCost: number;
-    averageRevenue: number;
-    averageMargin: number;
-    statusDistribution: {
-      status: MarginStatus;
-      count: number;
-      percentage: number;
-    }[];
-  };
-  teams?: TeamMarginItem[];
-  employees?: EmployeeMarginItem[];
-  pageable?: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
 }
 
 //-----------------------------------------------------------------------------
@@ -371,38 +323,6 @@ export interface OpportunityReportItem {
     description: string;
   };
   notes: OpportunityNote[];
-}
-
-/**
- * Opportunity report response data
- */
-export interface OpportunityReportResponse {
-  summary: {
-    totalOpportunities: number;
-    totalValue: number;
-    averageValue: number;
-    averageProbability: number;
-    stageDistribution: {
-      stage: DealStage;
-      count: number;
-      percentage: number;
-      value: number;
-    }[];
-    statusDistribution: {
-      status: OpportunityStatus;
-      count: number;
-      percentage: number;
-      value: number;
-    }[];
-  };
-  content: OpportunityReportItem[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
 }
 
 //-----------------------------------------------------------------------------
@@ -511,33 +431,6 @@ export interface ContractReportItem {
   files: ContractFile[];
 }
 
-/**
- * Contract report response data
- */
-export interface ContractReportResponse {
-  summary: {
-    totalContracts: number;
-    totalValue: number;
-    averageValue: number;
-    totalPaid: number;
-    remainingValue: number;
-    statusDistribution: {
-      status: ContractStatus;
-      count: number;
-      percentage: number;
-      value: number;
-    }[];
-  };
-  content: ContractReportItem[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
-}
-
 //-----------------------------------------------------------------------------
 // Payment Report Types
 //-----------------------------------------------------------------------------
@@ -598,33 +491,6 @@ export interface PaymentReportItem {
   notes?: string;
 }
 
-/**
- * Payment report response data
- */
-export interface PaymentReportResponse {
-  summary: {
-    totalPayments: number;
-    totalAmount: number;
-    paidAmount: number;
-    pendingAmount: number;
-    overdueAmount: number;
-    statusDistribution: {
-      status: PaymentStatus;
-      count: number;
-      percentage: number;
-      amount: number;
-    }[];
-  };
-  content: PaymentReportItem[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
-}
-
 //-----------------------------------------------------------------------------
 // KPI Report Types
 //-----------------------------------------------------------------------------
@@ -683,35 +549,6 @@ export interface KpiProgressItem {
     date: string;
     value: number;
   }[];
-}
-
-/**
- * KPI report response data
- */
-export interface KpiReportResponse {
-  summary: {
-    totalKpis: number;
-    averageProgress: number;
-    statusDistribution: {
-      status: 'OnTrack' | 'AtRisk' | 'OffTrack' | 'Completed';
-      count: number;
-      percentage: number;
-    }[];
-    categoryDistribution: {
-      category: string;
-      count: number;
-      percentage: number;
-      averageProgress: number;
-    }[];
-  };
-  content: KpiProgressItem[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-    totalElements: number;
-    sort?: string;
-  };
 }
 
 //-----------------------------------------------------------------------------
@@ -795,10 +632,455 @@ export interface TeamUtilizationItem {
   }[];
 }
 
+//-----------------------------------------------------------------------------
+// Report List Types
+//-----------------------------------------------------------------------------
+
 /**
- * Utilization report response data
+ * Represents a report in the system
  */
+export interface Report {
+  id: string;
+  name: string;
+  description: string;
+  module: ReportModule;
+  type: ReportType;
+  url: string;
+  permission?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Report module categorization
+ */
+export type ReportModule = 
+  | 'hrm' 
+  | 'margin' 
+  | 'opportunity' 
+  | 'contract' 
+  | 'finance' 
+  | 'dashboard' 
+  | 'admin';
+
+/**
+ * Report type categorization
+ */
+export type ReportType = 
+  | 'analytical' 
+  | 'operational' 
+  | 'summary';
+
+/**
+ * Parameters for fetching reports list
+ */
+export interface ReportListParams {
+  search?: string;
+  module?: ReportModule;
+  type?: ReportType;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+  page?: number;
+  size?: number;
+}
+
+/**
+ * Report list response from API
+ */
+export interface ReportListResponse {
+  data: Report[];
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+//-----------------------------------------------------------------------------
+// Dashboard Data Types
+//-----------------------------------------------------------------------------
+
+/**
+ * Parameters for fetching dashboard data
+ */
+export interface DashboardParams {
+  fromDate?: string;
+  toDate?: string;
+  teamId?: number;
+  widgets?: string[];
+}
+
+/**
+ * Dashboard summary response
+ */
+export interface DashboardSummaryResponse {
+  dateRange: {
+    fromDate: string;
+    toDate: string;
+  };
+  widgets: {
+    opportunity_status?: OpportunityStatusWidget;
+    margin_distribution?: MarginDistributionWidget;
+    revenue_summary?: RevenueSummaryWidget;
+    employee_status?: EmployeeStatusWidget;
+    utilization_rate?: UtilizationRateWidget;
+  };
+}
+
+// Widget specific types
+export interface OpportunityStatusWidget {
+  totalOpportunities: number;
+  byStatus: {
+    green: number;
+    yellow: number;
+    red: number;
+  };
+  byDealStage: Array<{
+    stage: string;
+    count: number;
+  }>;
+  topOpportunities: Array<{
+    id: number;
+    name: string;
+    customer: string;
+    value: number;
+    stage: string;
+    lastInteraction: string;
+  }>;
+}
+
+export interface MarginDistributionWidget {
+  totalEmployees: number;
+  distribution: {
+    green: {
+      count: number;
+      percentage: number;
+    };
+    yellow: {
+      count: number;
+      percentage: number;
+    };
+    red: {
+      count: number;
+      percentage: number;
+    };
+  };
+  trend: Array<{
+    month: string;
+    value: number;
+  }>;
+}
+
+export interface RevenueSummaryWidget {
+  currentMonth: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  currentQuarter: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  ytd: {
+    target: number;
+    actual: number;
+    achievement: number;
+  };
+  contracts: {
+    total: number;
+    newlyAdded: number;
+  };
+  payment: {
+    totalDue: number;
+    overdue: number;
+    upcoming: number;
+  };
+}
+
+export interface EmployeeStatusWidget {
+  totalEmployees: number;
+  byStatus: {
+    allocated: number;
+    available: number;
+    endingSoon: number;
+    onLeave: number;
+  };
+  endingSoonList: Array<{
+    id: number;
+    name: string;
+    projectEndDate: string;
+  }>;
+}
+
+export interface UtilizationRateWidget {
+  overall: number;
+  byTeam: Array<{
+    team: string;
+    rate: number;
+  }>;
+  trend: Array<{
+    month: string;
+    value: number;
+  }>;
+}
+
+//-----------------------------------------------------------------------------
+// Other Report Types
+//-----------------------------------------------------------------------------
+
+// Base params for all report types
+export interface BaseReportParams {
+  page?: number;
+  size?: number;
+  fromDate?: string;
+  toDate?: string;
+  teamId?: number;
+  exportType?: 'json' | 'csv' | 'excel';
+}
+
+// Employee Report Types
+export interface EmployeeReportParams extends BaseReportParams {
+  search?: string;
+  status?: EmployeeReportStatus;
+  skills?: string[];
+}
+
+export interface EmployeeReportResponse {
+  data: EmployeeReportItem[];
+  summary: {
+    totalEmployees: number;
+    activeEmployees: number;
+    averageUtilization: number;
+    totalBillableHours: number;
+    totalNonBillableHours: number;
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Margin Report Types
+export interface MarginReportParams extends BaseReportParams {
+  groupBy?: 'team' | 'employee';
+  period?: 'month' | 'quarter' | 'year';
+}
+
+export interface MarginReportResponse {
+  data: Array<{
+    id: number | string;
+    name: string;
+    team?: string;
+    cost: number;
+    revenue: number;
+    margin: number;
+    marginStatus: MarginStatus;
+  }>;
+  summary: {
+    totalTeams?: number;
+    totalEmployees: number;
+    totalCost: number;
+    totalRevenue: number;
+    averageMargin: number;
+    statusDistribution: {
+      status: MarginStatus;
+      count: number;
+      percentage: number;
+    }[];
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Opportunity Report Types
+export interface OpportunityReportParams extends BaseReportParams {
+  search?: string;
+  status?: OpportunityStatus;
+  dealStage?: DealStage;
+  salesId?: number;
+  followUpStatus?: 'green' | 'yellow' | 'red';
+}
+
+export interface OpportunityReportResponse {
+  data: Array<{
+    id: number;
+    name: string;
+    customer: string;
+    dealStage: string;
+    value: number;
+    salesOwner: string;
+    createdAt: string;
+    lastInteraction: string;
+    followUpStatus: 'green' | 'yellow' | 'red';
+  }>;
+  summary: {
+    totalOpportunities: number;
+    totalValue: number;
+    averageValue: number;
+    averageProbability: number;
+    stageDistribution: Array<{ 
+      stage: DealStage;
+      count: number;
+      percentage: number;
+      value: number;
+    }>;
+    statusDistribution: Array<{
+      status: OpportunityStatus;
+      count: number;
+      percentage: number;
+      value: number;
+    }>;
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Contract Report Types
+export interface ContractReportParams extends BaseReportParams {
+  search?: string;
+  status?: ContractStatus;
+  customerId?: number;
+  salesId?: number;
+}
+
+export interface ContractReportResponse {
+  data: Array<{
+    id: number;
+    name: string;
+    customer: string;
+    status: string;
+    value: number;
+    signedDate: string;
+    startDate: string;
+    endDate: string;
+    salesOwner: string;
+  }>;
+  summary: {
+    totalContracts: number;
+    totalValue: number;
+    averageValue: number;
+    totalPaid: number;
+    remainingValue: number;
+    statusDistribution: Array<{
+      status: ContractStatus;
+      count: number;
+      percentage: number;
+      value: number;
+    }>;
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Payment Report Types
+export interface PaymentReportParams extends BaseReportParams {
+  status?: PaymentStatus;
+  contractId?: number;
+  customerId?: number;
+}
+
+export interface PaymentReportResponse {
+  data: Array<{
+    id: number;
+    contractId: number;
+    contractName: string;
+    customer: string;
+    amount: number;
+    dueDate: string;
+    paidDate?: string;
+    status: PaymentStatus;
+  }>;
+  summary: {
+    totalPayments: number;
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    overdueAmount: number;
+    statusDistribution: Array<{
+      status: PaymentStatus;
+      count: number;
+      percentage: number;
+      amount: number;
+    }>;
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// KPI Report Types
+export interface KpiReportParams extends BaseReportParams {
+  salesId?: number;
+  period?: KpiPeriodType;
+}
+
+export interface KpiReportResponse {
+  data: Array<{
+    id: number;
+    salesName: string;
+    period: string;
+    target: number;
+    actual: number;
+    achievement: number;
+  }>;
+  summary: {
+    totalKpis: number;
+    averageProgress: number;
+    statusDistribution: Array<{
+      status: 'Completed' | 'OnTrack' | 'AtRisk' | 'OffTrack';
+      count: number;
+      percentage: number;
+    }>;
+    categoryDistribution: Array<{
+      category: string;
+      count: number;
+      percentage: number;
+      averageProgress: number;
+    }>;
+  };
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Utilization Report Types
+export interface UtilizationReportParams extends BaseReportParams {
+  employeeId?: number;
+  groupBy?: 'team' | 'employee';
+  period?: UtilizationPeriodType;
+}
+
 export interface UtilizationReportResponse {
+  data: Array<{
+    id: number | string;
+    name: string;
+    team?: string;
+    utilization: number;
+    billableHours: number;
+    totalHours: number;
+  }>;
   summary: {
     totalEmployees?: number;
     totalTeams?: number;
@@ -806,19 +1088,134 @@ export interface UtilizationReportResponse {
     billableHours: number;
     nonBillableHours: number;
     averageUtilization: number;
-    utilizationDistribution: {
+    utilizationDistribution: Array<{
       range: string;
       count: number;
       percentage: number;
-    }[];
+    }>;
   };
-  employees?: EmployeeUtilizationItem[];
-  teams?: TeamUtilizationItem[];
-  pageable?: {
-    pageNumber: number;
-    pageSize: number;
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
     totalPages: number;
-    totalElements: number;
-    sort?: string;
   };
+}
+
+/**
+ * Generic Report Response
+ * Kiểu dữ liệu chung cho tất cả các loại báo cáo
+ */
+export interface GenericReportResponse {
+  status: string;
+  code: number;
+  data: {
+    reportInfo: ReportInfo;
+    content: any[];
+    summaryMetrics?: any;
+    pageable?: PageableInfo;
+  };
+}
+
+/**
+ * Report Info
+ * Thông tin chung về báo cáo
+ */
+export interface ReportInfo {
+  reportName: string;
+  generatedAt: string;
+  period?: string;
+  fromDate?: string;
+  toDate?: string;
+  filters?: Record<string, any>;
+}
+
+/**
+ * Pageable Info
+ * Thông tin phân trang
+ */
+export interface PageableInfo {
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+  totalElements: number;
+  sort: string;
+}
+
+/**
+ * Report Filter
+ * Cấu trúc của một bộ lọc báo cáo
+ */
+export interface ReportFilter {
+  id: string;
+  label: string;
+  type: 'text' | 'select' | 'date' | 'daterange' | 'number' | 'checkbox' | 'radio';
+  defaultValue?: any;
+  options?: Array<{
+    value: string | number;
+    label: string;
+  }>;
+  multiple?: boolean;
+  required?: boolean;
+  min?: number;
+  max?: number;
+  placeholder?: string;
+}
+
+/**
+ * Report Viewer Props
+ * Props cho component ReportViewer
+ */
+export interface ReportViewerProps {
+  data: GenericReportResponse;
+  type: string;
+  isLoading: boolean;
+}
+
+/**
+ * Report Header Props
+ * Props cho component ReportHeader
+ */
+export interface ReportHeaderProps {
+  title: string;
+  description?: string;
+  updatedAt?: string;
+  onBack: () => void;
+}
+
+/**
+ * Report Toolbar Props
+ * Props cho component ReportToolbar
+ */
+export interface ReportToolbarProps {
+  onExport: (type: 'excel' | 'csv' | 'pdf') => void;
+  onPrint: () => void;
+  onRefresh: () => void;
+  isLoading: boolean;
+}
+
+/**
+ * Report Filters Props
+ * Props cho component ReportFilters
+ */
+export interface ReportFiltersProps {
+  filters: ReportFilter[];
+  values: Record<string, any>;
+  onChange: (values: Record<string, any>) => void;
+  onApply: () => void;
+  onReset: () => void;
+}
+
+/**
+ * Report List Filters Props
+ * Props cho component ReportFilters trên trang danh sách báo cáo
+ */
+export interface ReportListFiltersProps {
+  searchTerm: string;
+  selectedModule: ReportModule | null;
+  selectedType: ReportType | null;
+  onSearch: (term: string) => void;
+  onModuleChange: (module: string | null) => void;
+  onTypeChange: (type: string | null) => void;
+  onClearFilters: () => void;
 } 

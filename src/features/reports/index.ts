@@ -1,18 +1,18 @@
 /**
- * Reports Feature Module
- * 
- * This is the main entry point for the reports feature.
- * It exports types, API functions, services, and routes.
+ * Reports module entry point
  */
 
-// Export all types
+// Export all pages
+export * from './pages';
+
+// Export components
+export * from './components';
+
+// Export routes
+export { ReportsRoutes } from './routes';
+
+// Export types
 export * from './types';
 
 // Export services
-export { 
-  dashboardService,
-  reportService
-} from './service';
-
-// Export routes
-export { ReportsRoutes } from './routes'; 
+export { reportService } from './service'; 
