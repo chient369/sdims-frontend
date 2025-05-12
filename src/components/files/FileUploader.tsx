@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { useDropzone, FileRejection } from 'react-dropzone';
-import { UploadIcon, XIcon } from '@heroicons/react/outline';
+import { useDropzone, FileRejection, Accept } from 'react-dropzone';
+import { ArrowUpTrayIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { cn } from '../../utils/cn';
 import { Button } from '../ui/Button';
 import { Progress } from '../ui/Progress';
@@ -10,25 +10,27 @@ import { Progress } from '../ui/Progress';
  * @param {Function} onUpload - Callback function to handle uploaded files.
  * @param {number} maxFiles - Maximum number of files allowed.
  * @param {number} maxSize - Maximum file size allowed in bytes.
- * @param {Record<string, string[]>} accept - Object specifying accepted file types.
+ * @param {string} accept - Accepted file types.
  * @param {string} className - Additional CSS class names.
  * @param {boolean} disabled - Whether the uploader is disabled.
  * @returns {JSX.Element} The rendered file uploader component.
  */
-export interface FileUploadProps {
-  onUpload: (files: File[]) => Promise<void>;
-  maxFiles?: number;
-  maxSize?: number; // in bytes
-  accept?: Record<string, string[]>;
+export interface FileUploaderProps {
+  onFilesChange: (files: File[]) => void;
+  multiple?: boolean;
+  accept?: Accept | string;
+  maxSize?: number;
+  label?: string;
   className?: string;
   disabled?: boolean;
 }
 
-export const FileUploader: React.FC<FileUploadProps> = ({
-  onUpload,
-  maxFiles = 5,
-  maxSize = 5 * 1024 * 1024, // 5MB default
+export const FileUploader: React.FC<FileUploaderProps> = ({
+  onFilesChange,
+  multiple = false,
   accept,
+  maxSize = 5 * 1024 * 1024, // 5MB default
+  label,
   className,
   disabled = false,
 }) => {
@@ -55,7 +57,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
     }, 100);
     
     try {
-      await onUpload(acceptedFiles);
+      await onFilesChange(acceptedFiles);
       setProgress(100);
       setTimeout(() => {
         setUploading(false);
@@ -67,7 +69,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
     } finally {
       clearInterval(progressInterval);
     }
-  }, [onUpload]);
+  }, [onFilesChange]);
   
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     if (fileRejections.length > 0) {
@@ -89,7 +91,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
   
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    maxFiles,
+    maxFiles: multiple ? undefined : 1,
     maxSize,
     accept,
     disabled: disabled || uploading,
@@ -109,7 +111,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
       >
         <input {...getInputProps()} />
         
-        <UploadIcon className="w-10 h-10 text-gray-400 mb-3" />
+        <ArrowUpTrayIcon className="w-10 h-10 text-gray-400 mb-3" />
         
         <p className="text-sm text-gray-600">
           {isDragActive 
@@ -118,7 +120,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
         </p>
         
         <p className="text-xs text-gray-500 mt-1">
-          {`Max ${maxFiles} files, up to ${(maxSize / (1024 * 1024)).toFixed(0)}MB each`}
+          {`Max ${multiple ? 'multiple' : '1'} file, up to ${(maxSize / (1024 * 1024)).toFixed(0)}MB each`}
         </p>
         
         <Button 
@@ -149,7 +151,7 @@ export const FileUploader: React.FC<FileUploadProps> = ({
             onClick={() => setError(null)}
             className="ml-2 text-red-500 hover:text-red-700"
           >
-            <XIcon className="w-4 h-4" />
+            <XMarkIcon className="w-4 h-4" />
           </button>
         </div>
       )}

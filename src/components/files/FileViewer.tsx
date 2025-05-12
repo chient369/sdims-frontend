@@ -3,7 +3,7 @@ import { Modal } from '../modals/Modal';
 import { ModalHeader } from '../modals/ModalHeader';
 import { ModalBody } from '../modals/ModalBody';
 import { Button } from '../ui/Button';
-import { DownloadIcon } from '@heroicons/react/outline';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { FileInfo } from './FilePreview';
 import { Document, Page, pdfjs } from 'react-pdf';
 
@@ -64,7 +64,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
             download={name}
             className="flex items-center text-sm text-primary-600 hover:text-primary-800"
           >
-            <DownloadIcon className="w-4 h-4 mr-1" />
+            <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
             Download
           </a>
         )}

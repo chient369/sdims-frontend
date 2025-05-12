@@ -1,15 +1,15 @@
 import React from 'react';
 import {
   DocumentIcon,
-  PhotographIcon,
+  PhotoIcon,
   DocumentTextIcon,
-  TableIcon,
+  TableCellsIcon,
   FilmIcon,
-  MusicNoteIcon,
-  CodeIcon,
-  ArchiveIcon,
-  XIcon
-} from '@heroicons/react/outline';
+  MusicalNoteIcon,
+  CodeBracketIcon,
+  ArchiveBoxIcon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
 import { cn } from '../../utils/cn';
 
 /**
@@ -75,14 +75,14 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
   ].includes(type);
   
   const getFileIcon = () => {
-    if (isImage) return <PhotographIcon className="w-10 h-10 text-blue-500" />;
+    if (isImage) return <PhotoIcon className="w-10 h-10 text-blue-500" />;
     if (isPdf) return <DocumentTextIcon className="w-10 h-10 text-red-500" />;
     if (isVideo) return <FilmIcon className="w-10 h-10 text-purple-500" />;
-    if (isAudio) return <MusicNoteIcon className="w-10 h-10 text-green-500" />;
-    if (isSpreadsheet) return <TableIcon className="w-10 h-10 text-emerald-500" />;
+    if (isAudio) return <MusicalNoteIcon className="w-10 h-10 text-green-500" />;
+    if (isSpreadsheet) return <TableCellsIcon className="w-10 h-10 text-emerald-500" />;
     if (isDocument) return <DocumentIcon className="w-10 h-10 text-blue-500" />;
-    if (isCode) return <CodeIcon className="w-10 h-10 text-gray-500" />;
-    if (isArchive) return <ArchiveIcon className="w-10 h-10 text-amber-500" />;
+    if (isCode) return <CodeBracketIcon className="w-10 h-10 text-gray-500" />;
+    if (isArchive) return <ArchiveBoxIcon className="w-10 h-10 text-amber-500" />;
     return <DocumentIcon className="w-10 h-10 text-gray-500" />;
   };
   
@@ -128,7 +128,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
               }}
               className="ml-2 text-gray-400 hover:text-red-500"
             >
-              <XIcon className="w-4 h-4" />
+              <XMarkIcon className="w-4 h-4" />
             </button>
           )}
         </div>
