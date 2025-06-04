@@ -8,12 +8,7 @@ import { LoginCredentials, AuthResponse, RefreshTokenRequest, UserProfile } from
  * @returns Promise containing auth response with token and user info
  */
 export const login = async (credentials: LoginCredentials, config?: AxiosRequestConfig): Promise<AuthResponse> => {
-  const response = await apiClient.post('/api/v1/auth/login', credentials, config);
-  // API returns { status, code, data } structure where data contains our actual auth response
-  if (response?.data?.status === 'success' && response.data.data) {
-    return response.data.data;
-  }
-  return response.data;
+  return (await apiClient.post('/api/v1/auth/login', credentials, config)).data;
 };
 
 /**
@@ -21,12 +16,7 @@ export const login = async (credentials: LoginCredentials, config?: AxiosRequest
  * @returns Promise containing the user profile with detailed information
  */
 export const getUserProfile = async (config?: AxiosRequestConfig): Promise<UserProfile> => {
-  const response = await apiClient.get('/api/v1/auth/me', config);
-  // API returns { status, code, data } structure where data contains our actual profile data
-  if (response?.data?.status === 'success' && response.data.data) {
-    return response.data.data;
-  }
-  return response.data;
+  return (await apiClient.get('/api/v1/auth/me', config)).data;
 };
 
 /**
@@ -53,12 +43,7 @@ export const logout = async (config?: AxiosRequestConfig): Promise<void> => {
  * @returns Promise containing auth response with new tokens
  */
 export const refreshToken = async (refreshTokenRequest: RefreshTokenRequest, config?: AxiosRequestConfig): Promise<AuthResponse> => {
-  const response = await apiClient.post('/api/v1/auth/refresh-token', refreshTokenRequest, config);
-  // API returns { status, code, data } structure where data contains our actual auth response
-  if (response?.data?.status === 'success' && response.data.data) {
-    return response.data.data;
-  }
-  return response.data;
+  return (await apiClient.post('/api/v1/auth/refresh-token', refreshTokenRequest, config)).data;
 };
 
 /**
@@ -67,7 +52,7 @@ export const refreshToken = async (refreshTokenRequest: RefreshTokenRequest, con
  * @returns Promise that resolves when the request is successful
  */
 export const requestPasswordReset = async (email: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.post('/api/v1/auth/request-password-reset', { email }, config);
+  return (await apiClient.post('/api/v1/auth/request-password-reset', { email }, config)).data;
 };
 
 /**
@@ -77,5 +62,5 @@ export const requestPasswordReset = async (email: string, config?: AxiosRequestC
  * @returns Promise that resolves when password is reset
  */
 export const resetPassword = async (token: string, newPassword: string, config?: AxiosRequestConfig): Promise<void> => {
-  return apiClient.post('/api/v1/auth/reset-password', { token, newPassword }, config);
+  return (await apiClient.post('/api/v1/auth/reset-password', { token, newPassword }, config)).data;
 }; 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ContractSummary } from '../types';
 import { Table } from '../../../components/table';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
@@ -10,7 +10,18 @@ import {
   HiChevronLeft,
   HiChevronRight,
   HiChevronDoubleRight,
+  HiEye,
+  HiPencil,
+  HiTrash
 } from 'react-icons/hi';
+import { useNavigate } from 'react-router-dom';
+import { useContractService } from '../hooks/useContractService';
+import { ConfirmationDialog } from '../../../components/modals/ConfirmationDialog';
+import { useNotifications } from '../../../context/NotificationContext';
+import { Modal } from '../../../components/modals/Modal';
+import { ModalHeader } from '../../../components/modals/ModalHeader';
+import { ModalBody } from '../../../components/modals/ModalBody';
+import { ModalFooter } from '../../../components/modals/ModalFooter';
 
 interface ContractTableProps {
   contracts: ContractSummary[];
@@ -119,6 +130,14 @@ const ContractTable: React.FC<ContractTableProps> = ({
   onSortChange,
   onViewDetail
 }) => {
+  const navigate = useNavigate();
+  const contractService = useContractService();
+  const { showToast } = useNotifications();
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [contractToDelete, setContractToDelete] = useState<number | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [contractToEdit, setContractToEdit] = useState<number | null>(null);
+
   // Cấu hình các cột cho bảng
   const columns: ColumnDef<ContractSummary, any>[] = [
     {
@@ -262,7 +281,7 @@ const ContractTable: React.FC<ContractTableProps> = ({
             className="p-1 text-gray-500 hover:text-primary-600 rounded"
             title="Xem chi tiết"
           >
-            <span className="material-icons-outlined text-xl">visibility</span>
+            <HiEye className="w-5 h-5" />
           </button>
           
           <PermissionGuard
@@ -274,7 +293,7 @@ const ContractTable: React.FC<ContractTableProps> = ({
               className="p-1 text-gray-500 hover:text-primary-600 rounded"
               title="Chỉnh sửa"
             >
-              <span className="material-icons-outlined text-xl">edit</span>
+              <HiPencil className="w-5 h-5" />
             </button>
           </PermissionGuard>
           
@@ -287,7 +306,7 @@ const ContractTable: React.FC<ContractTableProps> = ({
               className="p-1 text-gray-500 hover:text-red-600 rounded"
               title="Xóa hợp đồng"
             >
-              <span className="material-icons-outlined text-xl">delete</span>
+              <HiTrash className="w-5 h-5" />
             </button>
           </PermissionGuard>
         </div>
@@ -298,37 +317,88 @@ const ContractTable: React.FC<ContractTableProps> = ({
 
   // Placeholder functions cho các hành động edit và delete
   const handleEdit = (id: number) => {
-    console.log(`Edit contract: ${id}`);
-    // Navigation to edit page would go here
+    setContractToEdit(id);
+    setEditModalOpen(true);
+  };
+  
+  const confirmEdit = () => {
+    if (contractToEdit === null) return;
+    navigate(`/contracts/${contractToEdit}/edit`);
   };
   
   const handleDelete = (id: number) => {
-    console.log(`Delete contract: ${id}`);
-    // Delete confirmation would go here
+    setContractToDelete(id);
+    setDeleteModalOpen(true);
+  };
+  
+  const confirmDelete = async () => {
+    if (contractToDelete === null) return;
+    
+    try {
+      await contractService.deleteContract(contractToDelete.toString());
+      showToast('success', 'Thành công', 'Xóa hợp đồng thành công');
+      // Refresh danh sách hợp đồng
+      window.location.reload();
+    } catch (error) {
+      console.error('Error deleting contract:', error);
+      showToast('error', 'Lỗi', 'Không thể xóa hợp đồng. Vui lòng thử lại sau.');
+    }
   };
   
   // Render bảng với dữ liệu
   return (
-    <div className="flex flex-col h-full border rounded-md overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-auto">
-        <Table<ContractSummary>
-          columns={columns}
-          data={contracts}
-          isLoading={loading}
-          enablePagination={false}
-        />
+    <>
+      <div className="flex flex-col h-full border rounded-md overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
+          <Table<ContractSummary>
+            columns={columns}
+            data={contracts}
+            isLoading={loading}
+            enablePagination={false}
+          />
+        </div>
+        
+        <div className="flex-shrink-0 w-full">
+          <CustomPagination
+            page={page}
+            pageSize={limit}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            onPageSizeChange={onLimitChange}
+          />
+        </div>
       </div>
       
-      <div className="flex-shrink-0 w-full">
-        <CustomPagination
-          page={page}
-          pageSize={limit}
-          totalPages={totalPages}
-          onPageChange={onPageChange}
-          onPageSizeChange={onLimitChange}
-        />
-      </div>
-    </div>
+      <ConfirmationDialog
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Xóa hợp đồng"
+        message="Bạn có chắc chắn muốn xóa hợp đồng này? Hành động này không thể hoàn tác."
+        confirmLabel="Xóa"
+        cancelLabel="Hủy"
+        confirmVariant="danger"
+        onConfirm={confirmDelete}
+      />
+      
+      <Modal 
+        isOpen={editModalOpen} 
+        onClose={() => setEditModalOpen(false)}
+        size="sm"
+      >
+        <ModalHeader>Chỉnh sửa hợp đồng</ModalHeader>
+        <ModalBody>
+          <p>Bạn đang chuẩn bị chỉnh sửa thông tin của hợp đồng. Bạn có muốn tiếp tục?</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+            Hủy
+          </Button>
+          <Button onClick={confirmEdit}>
+            Tiếp tục
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </>
   );
 };
 

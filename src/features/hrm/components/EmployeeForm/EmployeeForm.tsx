@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm, FormProvider } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-
-import { EmployeeCreateData } from '../../types';
 import useAuth from '../../../../hooks/useAuth';
 import { useEmployeeService } from '../../hooks/useServices';
-import { ConfirmationDialog } from '../../../../components/modals/ConfirmationDialog';
+import { employeeService, skillService } from '../../service';
 import { useContractService } from '../../../contracts/hooks/useContractService';
+import { 
+  EmployeeResponse, 
+  EmployeeCreateData,
+  EmployeeUpdateData,
+  EmployeeSkillCreateData
+} from '../../types';
+import { addOrUpdateEmployeeSkill } from '../../api';
+
+import { ConfirmationDialog } from '../../../../components/modals/ConfirmationDialog';
 
 import BasicInfoSection from './sections/BasicInfoSection';
 import OrganizationSection from './sections/OrganizationSection';
@@ -66,11 +73,12 @@ interface EmployeeData {
     role?: string;
     billingRate?: number;
   }[];
+  note?: string;
 }
 
 const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
   const { hasPermission, user } = useAuth();
-  const employeeService = useEmployeeService();
+  const employeeServiceFromHook = useEmployeeService();
   const contractService = useContractService();
   const navigate = useNavigate();
   const [skills, setSkills] = useState<ExtendedEmployeeSkillData[]>([]);
@@ -97,7 +105,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
       employeeCode: '',
       name: '',
       email: '',
+      position: '',
       status: 'Available',
+      emergencyContact: {
+        name: '',
+        phone: '',
+        relation: ''
+      },
+      joinDate: '',
+      birthDate: '',
+      address: ''
     }
   });
   
@@ -114,7 +131,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
     queryKey: ['employee', employeeId],
     queryFn: async () => {
       if (!employeeId) throw new Error('Employee ID is required');
-      return employeeService.getEmployeeById(employeeId.toString());
+      return employeeServiceFromHook.getEmployeeById(employeeId.toString());
     },
     enabled: !!employeeId && mode === 'edit'
   });
@@ -151,13 +168,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
   
   // Create employee mutation
   const createMutation = useMutation({
-    mutationFn: (data: EmployeeCreateData) => employeeService.createEmployee(data)
+    mutationFn: (data: EmployeeCreateData) => employeeServiceFromHook.createEmployee(data)
   });
   
   // Update employee mutation
   const updateMutation = useMutation({
     mutationFn: (data: { id: number, employee: Partial<EmployeeCreateData> }) => 
-      employeeService.updateEmployee(data.id.toString(), data.employee)
+      employeeServiceFromHook.updateEmployee(data.id.toString(), data.employee)
   });
   
   // Handle form submission
@@ -176,55 +193,74 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
       setIsSubmitting(true);
       setError(null);
       
-      // Add skills to form data
-      const formData = {
-        ...data,
-        skills
-      } as EmployeeCreateData;
-      
-      // Handle allocations separately
-      const employeeAllocations = data.allocations?.map(allocation => ({
-        id: allocation.id,
-        employeeId: employeeId || '', // Use current employee ID if editing
-        allocation: allocation.allocation,
-        role: allocation.role || allocation.position || 'Developer', // Default to position if role not provided
-        startDate: allocation.startDate,
-        endDate: allocation.endDate,
-        billingRate: allocation.billingRate || 0,
-        contractId: allocation.contractId,
-        projectId: allocation.projectId,
-        note: ''
-      })) || [];
-      
+      // Xử lý dữ liệu phù hợp với API
+      const employeeFormData: EmployeeCreateData = {
+        employeeCode: data.employeeCode,
+        name: data.name,
+        email: data.email,
+        position: data.position || '',
+        teamId: data.teamId || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        birthDate: data.birthDate || '',
+        joinDate: data.joinDate || '',
+        status: data.status as 'Available' | 'Allocated' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated',
+        userId: data.userId && !isNaN(Number(data.userId)) ? Number(data.userId) : null,
+        note: data.note || ''
+      };
+
+      // Xử lý emergencyContact nếu có
+      if (data.emergencyContact?.name && data.emergencyContact?.phone) {
+        employeeFormData.emergencyContact = {
+          name: data.emergencyContact.name,
+          phone: data.emergencyContact.phone,
+          relation: data.emergencyContact.relation
+        };
+      }
+
       // Create or update employee
       let employeeResponse: any;
       if (mode === 'create') {
-        employeeResponse = await createMutation.mutateAsync(formData);
+        employeeResponse = await createMutation.mutateAsync(employeeFormData);
+        
+        // Xử lý skills nếu có
+        if (skills.length > 0 && employeeResponse?.id) {
+          for (const skill of skills) {
+            await skillService.addOrUpdateEmployeeSkill(employeeResponse.id.toString(), {
+              skillId: skill.skillId,
+              level: skill.level,
+              years: skill.years
+            } as EmployeeSkillCreateData);
+          }
+        }
         
         // If we have allocations and the employee was created successfully
-        if (employeeAllocations.length > 0 && employeeResponse?.id) {
-          // Update allocations to use the new employee ID
-          const updatedAllocations = employeeAllocations.map(allocation => ({
-            ...allocation,
-            employeeId: employeeResponse.id.toString()
-          }));
-          
+        if (data.allocations && data.allocations.length > 0 && employeeResponse?.id) {
           // Group allocations by contract
-          const allocationsByContract = updatedAllocations.reduce((acc: Record<string, any[]>, allocation) => {
+          const allocationsByContract = data.allocations.reduce((acc: Record<string, any[]>, allocation) => {
             const contractId = allocation.contractId || allocation.projectId;
             if (!contractId) return acc;
             
             if (!acc[contractId]) {
               acc[contractId] = [];
             }
-            acc[contractId].push(allocation);
+            
+            // Tạo dữ liệu allocation đúng chuẩn
+            acc[contractId].push({
+              employeeId: employeeResponse.id,
+              startDate: allocation.startDate,
+              endDate: allocation.endDate,
+              allocationPercentage: allocation.allocation,
+              billRate: allocation.billingRate || 0
+            });
+            
             return acc;
           }, {});
           
           // Call contract API to assign employees to contracts
           for (const [contractId, allocations] of Object.entries(allocationsByContract)) {
             await contractService.assignEmployeesToContract(contractId, {
-              employeeAllocations: allocations
+              employeeAssignments: allocations
             });
           }
         }
@@ -233,27 +269,47 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
       } else if (employeeId) {
         employeeResponse = await updateMutation.mutateAsync({
           id: employeeId,
-          employee: formData
+          employee: employeeFormData
         });
         
+        // Xử lý skills nếu có
+        if (skills.length > 0) {
+          for (const skill of skills) {
+            await skillService.addOrUpdateEmployeeSkill(employeeId.toString(), {
+              skillId: skill.skillId,
+              level: skill.level,
+              years: skill.years
+            } as EmployeeSkillCreateData);
+          }
+        }
+        
         // If we have allocations and the employee was updated successfully
-        if (employeeAllocations.length > 0 && employeeResponse?.id) {
+        if (data.allocations && data.allocations.length > 0 && employeeResponse?.id) {
           // Group allocations by contract
-          const allocationsByContract = employeeAllocations.reduce((acc: Record<string, any[]>, allocation) => {
+          const allocationsByContract = data.allocations.reduce((acc: Record<string, any[]>, allocation) => {
             const contractId = allocation.contractId || allocation.projectId;
             if (!contractId) return acc;
             
             if (!acc[contractId]) {
               acc[contractId] = [];
             }
-            acc[contractId].push(allocation);
+            
+            // Tạo dữ liệu allocation đúng chuẩn
+            acc[contractId].push({
+              employeeId: employeeId,
+              startDate: allocation.startDate,
+              endDate: allocation.endDate,
+              allocationPercentage: allocation.allocation,
+              billRate: allocation.billingRate || 0
+            });
+            
             return acc;
           }, {});
           
           // Call contract API to assign employees to contracts
           for (const [contractId, allocations] of Object.entries(allocationsByContract)) {
             await contractService.assignEmployeesToContract(contractId, {
-              employeeAllocations: allocations
+              employeeAssignments: allocations
             });
           }
         }

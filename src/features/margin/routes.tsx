@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import MarginList from './pages/MarginList';
 import CostInputPage from './pages/CostInputPage';
-import { PrivateRoute } from '../../components/auth/PrivateRoute';
+import PermissionGuard from '../../components/ui/PermissionGuard';
 
 // Định nghĩa kiểu route để sử dụng trong router
 interface RouteConfig {
@@ -17,23 +17,29 @@ interface RouteConfig {
  */
 const MarginRoutes: RouteConfig[] = [
   {
-    path: 'margins',
-    element: <Outlet />, // Thay thế empty fragment bằng Outlet
+    path: '/margins',
+    element: <Outlet />,
     children: [
       {
         index: true,
         element: (
-          <PrivateRoute requiredPermissions={['margin:read:all', 'margin:read:team', 'margin:read:own']} requireAll={false}>
+          <PermissionGuard 
+            requiredPermission={['margin:read:all', 'margin:read:team', 'margin:read:own']}
+            requireAll={false}
+          >
             <MarginList />
-          </PrivateRoute>
+          </PermissionGuard>
         )
       },
       {
         path: 'costs',
         element: (
-          <PrivateRoute requiredPermissions={['employee-cost:create', 'employee-cost:import']} requireAll={false}>
+          <PermissionGuard 
+            requiredPermission={['employee-cost:create', 'employee-cost:import']}
+            requireAll={false}
+          >
             <CostInputPage />
-          </PrivateRoute>
+          </PermissionGuard>
         )
       },
       {

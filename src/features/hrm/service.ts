@@ -28,6 +28,7 @@ import {
   EmployeeSkillCreateData,
   EmployeeSkillDeleteResponse,
   EmployeeSkillDetail,
+  SkillLevel,
   
   // Team Types
   TeamInfo,
@@ -204,15 +205,18 @@ class EmployeeService extends BaseApiService {
     skills: EmployeeSkillDetail[];
     projectHistory: EmployeeProjectHistoryResponse[];
   }> {
-    const [employee, skillsResponse, projectHistoryResponse] = await Promise.all([
+    // Tạo instance SkillService để sử dụng
+    const skillServiceInstance = new SkillService();
+
+    const [employee, skills, projectHistoryResponse] = await Promise.all([
       this.getEmployeeById(employeeId),
-      getEmployeeSkillsApi(employeeId),
+      skillServiceInstance.getEmployeeSkills(employeeId),
       this.getEmployeeProjectHistory(employeeId, { limit: 100 }),
     ]);
 
     return {
       employee,
-      skills: skillsResponse.skills,
+      skills,
       projectHistory: projectHistoryResponse.data,
     };
   }
@@ -328,14 +332,66 @@ class SkillService extends BaseApiService {
   }
 
   /**
-   * Get employee skills
+   * Get all skills for an employee
    */
   async getEmployeeSkills(
     employeeId: string,
     params?: Omit<EmployeeSkillsParams, 'employeeId'>
   ): Promise<EmployeeSkillDetail[]> {
-    const response = await getEmployeeSkillsApi(employeeId, params);
-    return response.skills;
+    try {
+      const response = await getEmployeeSkillsApi(employeeId, params);
+      
+      // Kiểm tra nếu response là kiểu mới
+      if ('content' in response) {
+        // Chuyển đổi từ kiểu mới sang kiểu cũ
+        const convertedSkills: EmployeeSkillDetail[] = response.content.map(skill => ({
+          id: skill.skillId,
+          name: skill.skillName,
+          category: {
+            id: 0, // Không có id trong API mới, gán giá trị mặc định
+            name: skill.skillCategoryName
+          },
+          level: this.convertSkillLevel(skill.selfAssessmentLevel),
+          years: skill.yearsExperience,
+          description: skill.selfComment || undefined,
+          isVerified: !!skill.leaderAssessmentLevel,
+          lastUpdated: skill.updatedAt
+        }));
+        
+        return convertedSkills;
+      }
+      
+      // Kiểu cũ
+      if ('skills' in response) {
+        return response.skills;
+      }
+      
+      // Nếu không khớp với bất kỳ định dạng nào
+      console.error('Unknown response format from getEmployeeSkills API', response);
+      return [];
+    } catch (error) {
+      console.error('Error in getEmployeeSkills:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Convert skill level string to standardized SkillLevel type
+   */
+  private convertSkillLevel(level: string): SkillLevel {
+    switch (level.toLowerCase()) {
+      case 'beginner':
+      case 'basic':
+        return 'Basic';
+      case 'intermediate':
+        return 'Intermediate';
+      case 'advanced':
+        return 'Advanced';
+      case 'expert':
+        return 'Expert';
+      default:
+        return 'Basic'; // Default value
+    }
   }
 
   /**

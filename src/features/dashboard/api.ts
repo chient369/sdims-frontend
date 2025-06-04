@@ -36,7 +36,13 @@ export const USE_MOCK_DATA = true;
 export const getDashboardSummary = async (params?: DashboardParams, config?: AxiosRequestConfig): Promise<DashboardSummary> => {
   // Sử dụng mock data nếu được cấu hình
   if (USE_MOCK_DATA) {
-    console.log('Using mock data for dashboard summary');
+    // Chỉ log trong môi trường development
+    if (process.env.NODE_ENV === 'development') {
+      // Sử dụng console group để gom nhóm log liên quan
+      console.groupCollapsed('Dashboard API');
+      console.log('Using mock data for dashboard summary');
+      console.groupEnd();
+    }
     // Import dashboard service dynamically để tránh circular dependency
     return dashboardService.getMockDashboardSummary(params);
   }
@@ -54,7 +60,9 @@ export const getDashboardSummary = async (params?: DashboardParams, config?: Axi
     
     return response.data;
   } catch (error) {
-    console.error('Failed to get dashboard summary, using mock data instead', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to get dashboard summary, using mock data instead', error);
+    }
     return dashboardService.getMockDashboardSummary(params);
   }
 };

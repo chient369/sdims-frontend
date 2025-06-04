@@ -13,58 +13,64 @@ const KpiManagement = lazy(() => import('./pages/KpiManagement'));
  * Định nghĩa các đường dẫn và quyền truy cập tương ứng
  */
 export const ContractRoutes = [
-  // Danh sách hợp đồng
+  // Route cho các tính năng contract cơ bản
   {
-    path: "/contracts",
-    element: (
-      <PrivateRoute requiredPermissions={['contract:read:all']}>
-        <ContractList />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['contract:read:all']} />,
+    children: [
+      // Danh sách hợp đồng
+      {
+        path: "/contracts",
+        element: <ContractList />
+      },
+      // Chi tiết hợp đồng
+      {
+        path: "/contracts/:id",
+        element: <ContractDetail />
+      }
+    ]
   },
-  // Tạo mới hợp đồng
+  // Route cho tạo và chỉnh sửa hợp đồng
   {
-    path: "/contracts/create",
-    element: (
-      <PrivateRoute requiredPermissions={['contract:create']}>
-        <ContractForm />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['contract:create']} />,
+    children: [
+      // Tạo mới hợp đồng
+      {
+        path: "/contracts/create",
+        element: <ContractForm />
+      }
+    ]
   },
-  // Chỉnh sửa hợp đồng
+  // Route cho chỉnh sửa hợp đồng
   {
-    path: "/contracts/edit/:id",
-    element: (
-      <PrivateRoute requiredPermissions={['contract:update:all']}>
-        <ContractForm />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['contract:update:all']} />,
+    children: [
+      // Chỉnh sửa hợp đồng
+      {
+        path: "/contracts/:id/edit",
+        element: <ContractForm />
+      }
+    ]
   },
-  // Chi tiết hợp đồng
+  // Route cho cập nhật trạng thái thanh toán
   {
-    path: "/contracts/:id",
-    element: (
-      <PrivateRoute requiredPermissions={['contract:read:all']}>
-        <ContractDetail />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['payment-status:update:all']} />,
+    children: [
+      // Cập nhật trạng thái thanh toán
+      {
+        path: "/contracts/payment-updates",
+        element: <PaymentStatusUpdate />
+      }
+    ]
   },
-  // Cập nhật trạng thái thanh toán
+  // Route cho quản lý KPI doanh thu
   {
-    path: "/contracts/payment-updates",
-    element: (
-      <PrivateRoute requiredPermissions={['payment-status:update:all']}>
-        <PaymentStatusUpdate />
-      </PrivateRoute>
-    )
-  },
-  // Quản lý KPI doanh thu
-  {
-    path: "/contracts/kpi-management",
-    element: (
-      <PrivateRoute requiredPermissions={['sales-kpi:read:all']}>
-        <KpiManagement />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['sales-kpi:read:all']} />,
+    children: [
+      // Quản lý KPI doanh thu
+      {
+        path: "/contracts/kpi-management",
+        element: <KpiManagement />
+      }
+    ]
   }
 ]; 

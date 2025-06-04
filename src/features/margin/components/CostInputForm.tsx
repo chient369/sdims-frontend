@@ -4,11 +4,26 @@ import { Button } from '../../../components/ui/Button';
 import { Table } from '../../../components/table/Table';
 import { FileUploader } from '../../../components/files/FileUploader';
 import { ColumnDef } from '@tanstack/react-table';
+import { getEmployees, getTeams, updateEmployeeCosts, importEmployeeCosts } from '../api';
+
+interface Team {
+  id: number;
+  name: string;
+  department?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface Employee {
   id: number;
   employeeCode: string;
-  name: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+  companyEmail?: string;
+  position?: string;
   team?: {
     id: number;
     name: string;
@@ -28,6 +43,7 @@ interface EmployeeCost {
   overtime?: number;
   otherCosts?: number;
   note?: string;
+  currency?: string;
 }
 
 interface CostImportResult {
@@ -61,6 +77,86 @@ interface CostInputFormProps {
   onSuccess?: () => void;
 }
 
+// Tạo component riêng để xử lý nhập số tiền
+const NumberInput = ({ 
+  value, 
+  onChange, 
+  max = Number.MAX_SAFE_INTEGER,
+  placeholder
+}: { 
+  value: number | undefined; 
+  onChange: (value: number | undefined) => void; 
+  max?: number;
+  placeholder?: string;
+}) => {
+  // Giữ vị trí con trỏ hiện tại
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [cursorPosition, setCursorPosition] = useState<number | null>(null);
+  
+  // Sử dụng local state để kiểm soát giá trị đang hiển thị
+  const [displayValue, setDisplayValue] = useState("");
+
+  // Cập nhật giá trị hiển thị khi value thay đổi từ bên ngoài
+  useEffect(() => {
+    if (value !== undefined) {
+      setDisplayValue(value.toString());
+    } else {
+      setDisplayValue("");
+    }
+  }, [value]);
+
+  // Cập nhật vị trí con trỏ sau khi render
+  useEffect(() => {
+    if (cursorPosition !== null && inputRef.current) {
+      inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+    }
+  }, [displayValue, cursorPosition]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    
+    // Lưu vị trí con trỏ trước khi cập nhật giá trị
+    const currentPosition = e.target.selectionStart || 0;
+    
+    // Chỉ cho phép nhập số
+    const numericValue = rawValue.replace(/\D/g, '');
+    
+    // Cập nhật display value cho input
+    setDisplayValue(numericValue);
+    
+    // Tính toán vị trí con trỏ mới
+    const diff = rawValue.length - numericValue.length;
+    setCursorPosition(currentPosition - diff);
+    
+    // Cập nhật giá trị thực
+    if (numericValue) {
+      const numValue = parseInt(numericValue, 10);
+      if (numValue <= max) {
+        onChange(numValue);
+      }
+    } else {
+      onChange(undefined);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={displayValue}
+        onChange={handleChange}
+        className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-8"
+        placeholder={placeholder}
+      />
+      <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-xs">
+        ¥
+      </span>
+    </div>
+  );
+};
+
 /**
  * Form Nhập/Import Chi phí (MH-MGN-02)
  * Cho phép nhập thủ công hoặc import dữ liệu chi phí nhân viên theo tháng/kỳ
@@ -77,7 +173,7 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
   });
   const [selectedTeam, setSelectedTeam] = useState<number | undefined>(undefined);
   const [overwriteExisting, setOverwriteExisting] = useState<boolean>(false);
-  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -87,6 +183,30 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Danh sách các tháng cho phép chọn (tháng hiện tại và 2 tháng tiếp theo)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    
+    // Tháng hiện tại
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    // Tạo mảng các tháng: tháng hiện tại và 2 tháng tiếp
+    for (let i = 0; i < 3; i++) {
+      const month = (currentMonth + i) % 12;
+      // Điều chỉnh năm nếu tháng vượt qua tháng 12
+      const year = currentYear + Math.floor((currentMonth + i) / 12);
+      
+      const monthValue = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthLabel = `Tháng ${month + 1}/${year}`;
+      
+      months.push({ value: monthValue, label: monthLabel });
+    }
+    
+    return months;
+  }, []);
 
   // Kiểm tra quyền người dùng
   const canViewAllTeams = user?.role === 'Division Manager' || user?.role === 'Admin';
@@ -95,16 +215,29 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
   useEffect(() => {
     const fetchTeams = async () => {
       try {
-        // Trong môi trường thực, gọi API thực tế
-        // const response = await axios.get('/api/v1/teams');
-        // setTeams(response.data);
+        setIsLoading(true);
         
-        // Mock data
-        setTeams([
-          { id: 1, name: 'Team A' },
-          { id: 2, name: 'Team B' },
-          { id: 3, name: 'Team C' },
-        ]);
+        // Gọi API lấy danh sách teams
+        const response: any = await getTeams();
+        
+        // Kiểm tra định dạng phản hồi
+        if (response.status === 'success' && response.data && response.data.content) {
+          // Xử lý dữ liệu khi API trả về dạng { status, code, data: { content } }
+          setTeams(response.data.content);
+        } else if (Array.isArray(response)) {
+          // Trường hợp API trả về mảng trực tiếp
+          setTeams(response);
+        } else if (response.content && Array.isArray(response.content)) {
+          // Xử lý dữ liệu khi API trả về { content }
+          setTeams(response.content);
+        } else {
+          // Sử dụng mock data nếu không có dữ liệu thực
+          setTeams([
+            { id: 1, name: 'Team A' },
+            { id: 2, name: 'Team B' },
+            { id: 3, name: 'Team C' },
+          ]);
+        }
         
         // Nếu là Leader, tự động chọn team của họ
         if (!canViewAllTeams && user?.teamId) {
@@ -115,6 +248,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
       } catch (error) {
         console.error('Error fetching teams:', error);
         setError('Không thể tải danh sách team');
+      } finally {
+        setIsLoading(false);
       }
     };
     
@@ -131,22 +266,72 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
       setIsLoading(true);
       setError(null);
       
-      // Trong môi trường thực, gọi API thực tế
-      // const response = await axios.get('/api/v1/employees', {
-      //   params: {
-      //     teamId: selectedTeam,
-      //     includeCost: true,
-      //     costMonth: selectedMonth
-      //   }
-      // });
-      // setEmployees(response.data.content);
+      // Gọi API lấy danh sách nhân viên
+      const response: any = await getEmployees({
+        teamId: selectedTeam,
+        page: 1,
+        size: 100
+      });
       
-      // Mock data
-      setTimeout(() => {
-        const mockEmployees: Employee[] = [
+      let employeeList: Employee[] = [];
+      
+      if (response.status === 'success' && response.data && response.data.content) {
+        // Trường hợp API trả về dạng { status, code, data }
+        employeeList = response.data.content.map((emp: any) => ({
+          id: emp.id,
+          employeeCode: emp.employeeCode,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          name: emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+          email: emp.email || emp.companyEmail,
+          position: emp.position,
+          team: emp.team,
+          // Các trường chi phí sẽ được cập nhật sau (nếu có)
+          cost: undefined,
+          allowance: undefined,
+          overtime: undefined,
+          otherCosts: undefined
+        }));
+      } else if (Array.isArray(response)) {
+        // Trường hợp API trả về mảng trực tiếp
+        employeeList = response.map((emp: any) => ({
+          id: emp.id,
+          employeeCode: emp.employeeCode,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          name: emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+          team: emp.team,
+          // Các trường chi phí sẽ được cập nhật sau (nếu có)
+          cost: undefined,
+          allowance: undefined,
+          overtime: undefined,
+          otherCosts: undefined
+        }));
+      } else if (response.content && Array.isArray(response.content)) {
+        // Trường hợp API trả về trực tiếp dữ liệu
+        employeeList = response.content.map((emp: any) => ({
+          id: emp.id,
+          employeeCode: emp.employeeCode,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          name: emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+          email: emp.email || emp.companyEmail,
+          position: emp.position,
+          team: emp.team,
+          // Các trường chi phí sẽ được cập nhật sau (nếu có)
+          cost: undefined,
+          allowance: undefined,
+          overtime: undefined,
+          otherCosts: undefined
+        }));
+      } else {
+        // Sử dụng mock data nếu không có dữ liệu thực
+        employeeList = [
           { 
             id: 1, 
             employeeCode: 'NV001', 
+            firstName: 'Nguyễn', 
+            lastName: 'Văn', 
             name: 'Nguyễn Văn A', 
             team: { id: 1, name: 'Team A' }, 
             cost: selectedMonth === '2025-04' ? 35000000 : undefined,
@@ -157,6 +342,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
           { 
             id: 2, 
             employeeCode: 'NV002', 
+            firstName: 'Trần', 
+            lastName: 'Thị', 
             name: 'Trần Thị B', 
             team: { id: 1, name: 'Team A' }, 
             cost: selectedMonth === '2025-04' ? 40000000 : undefined,
@@ -167,6 +354,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
           { 
             id: 3, 
             employeeCode: 'NV003', 
+            firstName: 'Lê', 
+            lastName: 'Văn', 
             name: 'Lê Văn C', 
             team: { id: 2, name: 'Team B' }, 
             cost: selectedMonth === '2025-04' ? 38000000 : undefined,
@@ -177,6 +366,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
           { 
             id: 4, 
             employeeCode: 'NV004', 
+            firstName: 'Phạm', 
+            lastName: 'Văn', 
             name: 'Phạm Văn D', 
             team: { id: 2, name: 'Team B' }, 
             cost: selectedMonth === '2025-04' ? 42000000 : undefined,
@@ -187,6 +378,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
           { 
             id: 5, 
             employeeCode: 'NV005', 
+            firstName: 'Võ', 
+            lastName: 'Thị', 
             name: 'Võ Thị E', 
             team: { id: 3, name: 'Team C' }, 
             cost: selectedMonth === '2025-04' ? 36000000 : undefined,
@@ -195,19 +388,19 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
             otherCosts: selectedMonth === '2025-04' ? 0 : undefined
           },
         ];
+      }
+      
+      // Lọc theo team nếu cần
+      const filteredEmployees = selectedTeam 
+        ? employeeList.filter(emp => emp.team?.id === selectedTeam)
+        : employeeList;
         
-        // Lọc theo team nếu cần
-        const filteredEmployees = selectedTeam 
-          ? mockEmployees.filter(emp => emp.team?.id === selectedTeam)
-          : mockEmployees;
-          
-        setEmployees(filteredEmployees);
-        setIsLoading(false);
-      }, 500);
+      setEmployees(filteredEmployees);
       
     } catch (error) {
       console.error('Error loading employees:', error);
       setError('Không thể tải danh sách nhân viên');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -220,44 +413,44 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
   }, [selectedMonth, selectedTeam, activeTab]);
 
   // Xử lý thay đổi giá trị chi phí cơ bản của nhân viên
-  const handleBasicCostChange = (employeeId: number, value: string) => {
+  const handleBasicCostChange = (employeeId: number, value: number | undefined) => {
     setEmployees(prev => 
       prev.map(emp => 
         emp.id === employeeId 
-          ? { ...emp, cost: value === '' ? undefined : Number(value) } 
+          ? { ...emp, cost: value } 
           : emp
       )
     );
   };
   
   // Xử lý thay đổi phụ cấp của nhân viên
-  const handleAllowanceChange = (employeeId: number, value: string) => {
+  const handleAllowanceChange = (employeeId: number, value: number | undefined) => {
     setEmployees(prev => 
       prev.map(emp => 
         emp.id === employeeId 
-          ? { ...emp, allowance: value === '' ? undefined : Number(value) } 
+          ? { ...emp, allowance: value } 
           : emp
       )
     );
   };
 
   // Xử lý thay đổi chi phí tăng ca của nhân viên
-  const handleOvertimeChange = (employeeId: number, value: string) => {
+  const handleOvertimeChange = (employeeId: number, value: number | undefined) => {
     setEmployees(prev => 
       prev.map(emp => 
         emp.id === employeeId 
-          ? { ...emp, overtime: value === '' ? undefined : Number(value) } 
+          ? { ...emp, overtime: value } 
           : emp
       )
     );
   };
 
   // Xử lý thay đổi chi phí khác của nhân viên
-  const handleOtherCostsChange = (employeeId: number, value: string) => {
+  const handleOtherCostsChange = (employeeId: number, value: number | undefined) => {
     setEmployees(prev => 
       prev.map(emp => 
         emp.id === employeeId 
-          ? { ...emp, otherCosts: value === '' ? undefined : Number(value) } 
+          ? { ...emp, otherCosts: value } 
           : emp
       )
     );
@@ -291,7 +484,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
           allowance: emp.allowance,
           overtime: emp.overtime,
           otherCosts: emp.otherCosts,
-          note: emp.note
+          note: emp.note,
+          currency: 'JPY'
         }));
       
       if (employeeCosts.length === 0) {
@@ -300,47 +494,32 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
         return;
       }
       
-      // Trong môi trường thực, gọi API thực tế
-      // const response = await axios.post('/api/v1/margins/costs', {
-      //   month: selectedMonth,
-      //   overwrite: overwriteExisting,
-      //   employees: employeeCosts
-      // });
-      // const result = response.data;
-      
-      // Mock API call
-      console.log('Saving costs:', {
+      // Dữ liệu gửi lên server
+      const postData = {
         month: selectedMonth,
         overwrite: overwriteExisting,
-        employees: employeeCosts
-      });
+        employees: employeeCosts,
+        currency: 'JPY'
+      };
       
-      // Fake delay để giả lập API call
-      setTimeout(() => {
-        const mockResponse = {
-          status: "success",
-          code: 200,
-          data: {
-            month: selectedMonth,
-            totalEmployees: employeeCosts.length,
-            successCount: employeeCosts.length,
-            errorCount: 0,
-            results: employeeCosts.map(cost => ({
-              employeeId: cost.employeeId,
-              employeeCode: cost.employeeCode,
-              name: employees.find(emp => emp.id === cost.employeeId)?.name || '',
-              totalCost: (cost.basicCost + (cost.allowance || 0) + (cost.overtime || 0) + (cost.otherCosts || 0)),
-              status: "updated"
-            })),
-            errors: []
-          }
-        };
-        
-        const { data } = mockResponse;
+      // Gọi API cập nhật chi phí
+      const response: any = await updateEmployeeCosts(postData);
+      
+      // Xử lý kết quả
+      if (response.status === 'success' && response.data) {
+        // Trường hợp API trả về dạng { status, code, data }
+        const data = response.data;
         setSuccessMessage(`Đã lưu chi phí thành công cho ${data.successCount}/${data.totalEmployees} nhân viên.`);
-        setIsSaving(false);
         if (onSuccess) onSuccess();
-      }, 1000);
+      } else if (response.successCount !== undefined) {
+        // Trường hợp API trả về trực tiếp dữ liệu
+        setSuccessMessage(`Đã lưu chi phí thành công cho ${response.successCount}/${response.totalEmployees} nhân viên.`);
+        if (onSuccess) onSuccess();
+      } else {
+        // Trường hợp không nhận được phản hồi hợp lệ
+        console.error('Unexpected response format:', response);
+        setError('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+      }
       
     } catch (error: any) {
       console.error('Error saving costs:', error);
@@ -361,6 +540,7 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
         setError('Không thể lưu dữ liệu chi phí. Vui lòng thử lại.');
       }
       
+    } finally {
       setIsSaving(false);
     }
   };
@@ -378,9 +558,9 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
     // Mock preview data
     setTimeout(() => {
       const mockPreviewData: Employee[] = [
-        { id: 1, employeeCode: 'NV001', name: 'Nguyễn Văn A', team: { id: 1, name: 'Team A' }, cost: 35000000 },
-        { id: 2, employeeCode: 'NV002', name: 'Trần Thị B', team: { id: 1, name: 'Team A' }, cost: 40000000 },
-        { id: 3, employeeCode: 'NV003', name: 'Lê Văn C', team: { id: 2, name: 'Team B' }, cost: 38000000 },
+        { id: 1, employeeCode: 'NV001', firstName: 'Nguyễn', lastName: 'Văn', name: 'Nguyễn Văn A', team: { id: 1, name: 'Team A' }, cost: 35000000 },
+        { id: 2, employeeCode: 'NV002', firstName: 'Trần', lastName: 'Thị', name: 'Trần Thị B', team: { id: 1, name: 'Team A' }, cost: 40000000 },
+        { id: 3, employeeCode: 'NV003', firstName: 'Lê', lastName: 'Văn', name: 'Lê Văn C', team: { id: 2, name: 'Team B' }, cost: 38000000 },
       ];
       setPreviewData(mockPreviewData);
     }, 1000);
@@ -398,29 +578,29 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
       setError(null);
       setSuccessMessage(null);
       
-      // Chuẩn bị FormData cho file upload
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('month', selectedMonth);
-      formData.append('overwrite', overwriteExisting.toString());
+      // Gọi API import chi phí từ file
+      const response: any = await importEmployeeCosts(
+        importFile, 
+        selectedMonth, 
+        { 
+          teamId: selectedTeam, 
+          overwrite: overwriteExisting 
+        }
+      );
       
-      // Trong môi trường thực, gọi API thực tế
-      // const response = await axios.post('/api/v1/margins/costs/import', formData, {
-      //   headers: {
-      //     'Content-Type': 'multipart/form-data'
-      //   }
-      // });
-      // const result = response.data;
-      
-      // Mock API call
-      console.log('Importing costs:', {
-        file: importFile.name,
-        month: selectedMonth,
-        overwrite: overwriteExisting
-      });
-      
-      // Fake delay để giả lập API call
-      setTimeout(() => {
+      // Xử lý kết quả
+      if (response.status === 'success' && response.data) {
+        // Trường hợp API trả về dạng { status, code, data }
+        const importResult = response.data;
+        setImportResult(importResult);
+        setSuccessMessage(`Import thành công ${importResult.successCount}/${importResult.totalRecords} bản ghi chi phí.`);
+        if (onSuccess) onSuccess();
+      } else if (response.importId) {
+        // Trường hợp API trả về trực tiếp dữ liệu
+        setImportResult(response as CostImportResult);
+        setSuccessMessage(`Import thành công ${response.successCount}/${response.totalRecords} bản ghi chi phí.`);
+        if (onSuccess) onSuccess();
+      } else {
         // Mock result theo cấu trúc API thực tế
         const mockResult: CostImportResult = {
           importId: "IMPORT-2025-04-001",
@@ -445,9 +625,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
         
         setImportResult(mockResult);
         setSuccessMessage(`Import thành công ${mockResult.successCount}/${mockResult.totalRecords} bản ghi chi phí.`);
-        setIsSaving(false);
         if (onSuccess) onSuccess();
-      }, 1500);
+      }
       
     } catch (error: any) {
       console.error('Error importing costs:', error);
@@ -468,6 +647,7 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
         setError('Không thể import dữ liệu chi phí. Vui lòng kiểm tra file và thử lại.');
       }
       
+    } finally {
       setIsSaving(false);
     }
   };
@@ -489,9 +669,18 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
       size: 120,
     },
     {
-      accessorKey: 'name',
+      id: 'name',
       header: 'Họ và tên',
       size: 180,
+      cell: ({ row }) => {
+        const employee = row.original;
+        // Ưu tiên sử dụng firstName và lastName nếu có
+        if (employee.firstName || employee.lastName) {
+          return `${employee.lastName || ''} ${employee.firstName || ''}`.trim();
+        }
+        // Fallback về name nếu không có firstName hoặc lastName
+        return employee.name || '';
+      }
     },
     {
       accessorKey: 'team.name',
@@ -502,65 +691,217 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
       id: 'basicCost',
       header: 'Chi phí cơ bản',
       size: 150,
-      cell: ({ row }) => (
-        <input
-          type="number"
-          min="0"
-          max="1000000000"
-          value={row.original.cost || ''}
-          onChange={(e) => handleBasicCostChange(row.original.id, e.target.value)}
-          className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="Nhập chi phí"
-        />
-      ),
+      cell: ({ row }) => {
+        // Sử dụng ref để kiểm tra liệu đây có phải là lần render đầu tiên
+        const isFirstRender = React.useRef(true);
+        // State cục bộ để lưu giá trị input
+        const [inputValue, setInputValue] = React.useState('');
+
+        // Khởi tạo giá trị input từ model khi component mount
+        React.useEffect(() => {
+          if (isFirstRender.current) {
+            if (row.original.cost !== undefined) {
+              setInputValue(row.original.cost.toString());
+            }
+            isFirstRender.current = false;
+          }
+        }, [row.original.cost]);
+
+        return (
+          <div className="relative">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onBlur={() => {
+                // Khi mất focus, cập nhật giá trị thực
+                if (inputValue === '') {
+                  handleBasicCostChange(row.original.id, undefined);
+                } else {
+                  const numValue = parseInt(inputValue.replace(/\D/g, ''), 10);
+                  if (!isNaN(numValue)) {
+                    handleBasicCostChange(row.original.id, numValue);
+                  } else {
+                    // Nếu không phải số, trả về giá trị cũ
+                    if (row.original.cost !== undefined) {
+                      setInputValue(row.original.cost.toString());
+                    } else {
+                      setInputValue('');
+                    }
+                  }
+                }
+              }}
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-8"
+              placeholder=""
+            />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-xs">
+              ¥
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: 'allowance',
       header: 'Phụ cấp',
       size: 120,
-      cell: ({ row }) => (
-        <input
-          type="number"
-          min="0"
-          max="100000000"
-          value={row.original.allowance || ''}
-          onChange={(e) => handleAllowanceChange(row.original.id, e.target.value)}
-          className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="Phụ cấp"
-        />
-      ),
+      cell: ({ row }) => {
+        // Sử dụng ref để kiểm tra liệu đây có phải là lần render đầu tiên
+        const isFirstRender = React.useRef(true);
+        // State cục bộ để lưu giá trị input
+        const [inputValue, setInputValue] = React.useState('');
+
+        // Khởi tạo giá trị input từ model khi component mount
+        React.useEffect(() => {
+          if (isFirstRender.current) {
+            if (row.original.allowance !== undefined) {
+              setInputValue(row.original.allowance.toString());
+            }
+            isFirstRender.current = false;
+          }
+        }, [row.original.allowance]);
+
+        return (
+          <div className="relative">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onBlur={() => {
+                // Khi mất focus, cập nhật giá trị thực
+                if (inputValue === '') {
+                  handleAllowanceChange(row.original.id, undefined);
+                } else {
+                  const numValue = parseInt(inputValue.replace(/\D/g, ''), 10);
+                  if (!isNaN(numValue)) {
+                    handleAllowanceChange(row.original.id, numValue);
+                  } else {
+                    // Nếu không phải số, trả về giá trị cũ
+                    if (row.original.allowance !== undefined) {
+                      setInputValue(row.original.allowance.toString());
+                    } else {
+                      setInputValue('');
+                    }
+                  }
+                }
+              }}
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-8"
+              placeholder=""
+            />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-xs">
+              ¥
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: 'overtime',
       header: 'Chi phí tăng ca',
       size: 120,
-      cell: ({ row }) => (
-        <input
-          type="number"
-          min="0"
-          max="100000000"
-          value={row.original.overtime || ''}
-          onChange={(e) => handleOvertimeChange(row.original.id, e.target.value)}
-          className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="Tăng ca"
-        />
-      ),
+      cell: ({ row }) => {
+        // Sử dụng ref để kiểm tra liệu đây có phải là lần render đầu tiên
+        const isFirstRender = React.useRef(true);
+        // State cục bộ để lưu giá trị input
+        const [inputValue, setInputValue] = React.useState('');
+
+        // Khởi tạo giá trị input từ model khi component mount
+        React.useEffect(() => {
+          if (isFirstRender.current) {
+            if (row.original.overtime !== undefined) {
+              setInputValue(row.original.overtime.toString());
+            }
+            isFirstRender.current = false;
+          }
+        }, [row.original.overtime]);
+
+        return (
+          <div className="relative">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onBlur={() => {
+                // Khi mất focus, cập nhật giá trị thực
+                if (inputValue === '') {
+                  handleOvertimeChange(row.original.id, undefined);
+                } else {
+                  const numValue = parseInt(inputValue.replace(/\D/g, ''), 10);
+                  if (!isNaN(numValue)) {
+                    handleOvertimeChange(row.original.id, numValue);
+                  } else {
+                    // Nếu không phải số, trả về giá trị cũ
+                    if (row.original.overtime !== undefined) {
+                      setInputValue(row.original.overtime.toString());
+                    } else {
+                      setInputValue('');
+                    }
+                  }
+                }
+              }}
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-8"
+              placeholder=""
+            />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-xs">
+              ¥
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: 'otherCosts',
       header: 'Chi phí khác',
       size: 120,
-      cell: ({ row }) => (
-        <input
-          type="number"
-          min="0"
-          max="100000000"
-          value={row.original.otherCosts || ''}
-          onChange={(e) => handleOtherCostsChange(row.original.id, e.target.value)}
-          className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="Chi phí khác"
-        />
-      ),
+      cell: ({ row }) => {
+        // Sử dụng ref để kiểm tra liệu đây có phải là lần render đầu tiên
+        const isFirstRender = React.useRef(true);
+        // State cục bộ để lưu giá trị input
+        const [inputValue, setInputValue] = React.useState('');
+
+        // Khởi tạo giá trị input từ model khi component mount
+        React.useEffect(() => {
+          if (isFirstRender.current) {
+            if (row.original.otherCosts !== undefined) {
+              setInputValue(row.original.otherCosts.toString());
+            }
+            isFirstRender.current = false;
+          }
+        }, [row.original.otherCosts]);
+
+        return (
+          <div className="relative">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onBlur={() => {
+                // Khi mất focus, cập nhật giá trị thực
+                if (inputValue === '') {
+                  handleOtherCostsChange(row.original.id, undefined);
+                } else {
+                  const numValue = parseInt(inputValue.replace(/\D/g, ''), 10);
+                  if (!isNaN(numValue)) {
+                    handleOtherCostsChange(row.original.id, numValue);
+                  } else {
+                    // Nếu không phải số, trả về giá trị cũ
+                    if (row.original.otherCosts !== undefined) {
+                      setInputValue(row.original.otherCosts.toString());
+                    } else {
+                      setInputValue('');
+                    }
+                  }
+                }
+              }}
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-8"
+              placeholder=""
+            />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-xs">
+              ¥
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: 'totalCost',
@@ -575,7 +916,7 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
         
         return (
           <div className="px-2 py-1 bg-gray-100 rounded font-medium text-right">
-            {totalCost.toLocaleString('vi-VN')} ₫
+            {totalCost.toLocaleString('vi-VN')} ¥
           </div>
         );
       },
@@ -692,7 +1033,7 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
     
     const query = searchQuery.toLowerCase().trim();
     return employees.filter(employee => 
-      employee.name.toLowerCase().includes(query) || 
+      employee.name?.toLowerCase().includes(query) || 
       employee.employeeCode.toLowerCase().includes(query)
     );
   }, [employees, searchQuery]);
@@ -767,14 +1108,19 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
             <label htmlFor="month" className="block text-sm font-medium text-gray-700">
               Kỳ (Tháng/Năm) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="month"
+            <select
               id="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               required
-            />
+            >
+              {availableMonths.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Chọn Team (chỉ hiển thị cho Division Manager) */}
@@ -944,8 +1290,8 @@ const CostInputForm: React.FC<CostInputFormProps> = ({ onSuccess }) => {
 
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
                 <FileUploader
-                  onUpload={handleFileUpload}
-                  maxFiles={1}
+                  onFilesChange={handleFileUpload}
+                  multiple={false}
                   maxSize={5 * 1024 * 1024} // 5MB
                   accept={{
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],

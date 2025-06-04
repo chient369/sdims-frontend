@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Spinner } from '../../components/ui/Spinner';
 import Login from './Login';
@@ -24,7 +24,6 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({
   const { state } = useAuth();
   const { isAuthenticated, isLoading } = state;
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/dashboard';
   
   // If still loading auth state, show spinner
   if (isLoading) {
@@ -35,9 +34,10 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({
     );
   }
   
-  // If route is restricted and user is logged in, redirect to dashboard/previous location
+  // If route is restricted and user is logged in, redirect to dashboard
+  // Chỉ redirect về dashboard, không dùng from location để tránh loop
   if (restricted && isAuthenticated) {
-    return <Navigate to={from} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   
   // Render the public component
@@ -46,7 +46,6 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({
 
 // PrivateRoute component
 interface PrivateRouteProps {
-  children: React.ReactNode;
   requiredPermissions?: string[];
   requiredRoles?: string[];
   requireAll?: boolean;
@@ -58,7 +57,6 @@ interface PrivateRouteProps {
  * @returns {React.ReactNode} The protected component or redirect
  */
 export const PrivateRoute: React.FC<PrivateRouteProps> = ({ 
-  children, 
   requiredPermissions = [],
   requiredRoles = [],
   requireAll = false
@@ -67,7 +65,7 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
   const { isAuthenticated, isLoading, user, userProfile } = state;
   const location = useLocation();
   
-  // If auth state is still loading, show a spinner
+  // If still loading auth state, show spinner
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -77,8 +75,9 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
   }
   
   // Check if user is authenticated
+  // Không lưu current location vào state để tránh loop
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
   
   // Get permissions from full profile if available, otherwise from basic user info
@@ -126,7 +125,7 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({
   }
   
   // Render the protected component
-  return <>{children}</>;
+  return <Outlet />;
 };
 
 // Define the route configurations

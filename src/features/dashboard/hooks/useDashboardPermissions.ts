@@ -1,4 +1,5 @@
 import { useAuth } from '../../../hooks/useAuth';
+import { useMemo, useCallback } from 'react';
 
 /**
  * Hook để quản lý và kiểm tra quyền cho các widget trong Dashboard
@@ -7,26 +8,26 @@ export const useDashboardPermissions = () => {
   const { hasPermission, hasAnyPermission, user } = useAuth();
   
   // Kiểm tra quyền xem widget Nhân sự
-  const canViewEmployeeWidgets = () => {
+  const canViewEmployeeWidgets = useCallback(() => {
     return hasAnyPermission([
       'employee-status:read:all', 
       'employee-status:read:team', 
       'employee-status:read:own',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Tỷ lệ Sử dụng
-  const canViewUtilizationWidget = () => {
+  const canViewUtilizationWidget = useCallback(() => {
     return hasAnyPermission([
       'utilization:read:all', 
       'utilization:read:team',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Phân bố Margin
-  const canViewMarginWidget = () => {
+  const canViewMarginWidget = useCallback(() => {
     return hasAnyPermission([
       'margin:read:all', 
       'margin:read:team',
@@ -34,10 +35,10 @@ export const useDashboardPermissions = () => {
       'margin-summary:read:team',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Cơ hội
-  const canViewOpportunityWidgets = () => {
+  const canViewOpportunityWidgets = useCallback(() => {
     return hasAnyPermission([
       'opportunity:read:all', 
       'opportunity:read:own', 
@@ -45,10 +46,10 @@ export const useDashboardPermissions = () => {
       'opportunities:read',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Doanh thu
-  const canViewRevenueWidget = () => {
+  const canViewRevenueWidget = useCallback(() => {
     return hasAnyPermission([
       'revenue-report:read:all', 
       'revenue-report:read:team', 
@@ -57,10 +58,10 @@ export const useDashboardPermissions = () => {
       'sales-kpi:read:own',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Công nợ
-  const canViewDebtWidget = () => {
+  const canViewDebtWidget = useCallback(() => {
     return hasAnyPermission([
       'debt-report:read:all', 
       'debt-report:read:own',
@@ -69,10 +70,10 @@ export const useDashboardPermissions = () => {
       'payment-alert:read:assigned',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Kiểm tra quyền xem widget Phễu bán hàng
-  const canViewSalesFunnelWidget = () => {
+  const canViewSalesFunnelWidget = useCallback(() => {
     return hasAnyPermission([
       'opportunity:read:all', 
       'opportunity:read:own', 
@@ -80,10 +81,10 @@ export const useDashboardPermissions = () => {
       'opportunities:read',
       'dashboard:read:all'
     ]);
-  };
+  }, [hasAnyPermission]);
   
   // Xác định quyền xem Dashboard dựa trên vai trò
-  const getRoleBasedPermissions = () => {
+  const getRoleBasedPermissions = useCallback(() => {
     if (!user) return [];
     
     const { role } = user;
@@ -97,14 +98,15 @@ export const useDashboardPermissions = () => {
     }
     
     return [];
-  };
+  }, [user]);
   
   // Kiểm tra nếu user có thể xem toàn bộ dashboard
-  const canViewFullDashboard = () => {
+  const canViewFullDashboard = useCallback(() => {
     return hasPermission('dashboard:read:all');
-  };
+  }, [hasPermission]);
   
-  return {
+  // Sử dụng useMemo để trả về object chỉ khi các dependencies thay đổi
+  return useMemo(() => ({
     canViewEmployeeWidgets,
     canViewUtilizationWidget,
     canViewMarginWidget,
@@ -114,5 +116,15 @@ export const useDashboardPermissions = () => {
     canViewSalesFunnelWidget,
     canViewFullDashboard,
     getRoleBasedPermissions
-  };
+  }), [
+    canViewEmployeeWidgets,
+    canViewUtilizationWidget,
+    canViewMarginWidget,
+    canViewOpportunityWidgets,
+    canViewRevenueWidget,
+    canViewDebtWidget,
+    canViewSalesFunnelWidget,
+    canViewFullDashboard,
+    getRoleBasedPermissions
+  ]);
 }; 

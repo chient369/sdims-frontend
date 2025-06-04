@@ -41,8 +41,10 @@ export interface PageableResponse {
  * Paginated employee response
  */
 export interface PaginatedEmployeeResponse {
-  content: EmployeeResponse[];
-  pageable: PageableResponse;
+  data: {
+    content: EmployeeResponse[];
+    pageable: PageableResponse;
+  };
 }
 
 /**
@@ -275,6 +277,46 @@ export interface EmployeeProjectHistoryResponse {
   utilization: number; // percentage 0-100
   performanceRating?: number; // 1-5
   feedback?: string;
+}
+
+/**
+ * New Employee response structure from API
+ */
+export interface NewEmployeeApiResponse {
+  id: number;
+  userId: number | null;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string | null;
+  hireDate: string;
+  companyEmail: string;
+  internalAccount: string;
+  address: string | null;
+  phoneNumber: string | null;
+  emergencyContact: string | null;
+  position: string;
+  team: {
+    id: number;
+    name: string;
+  };
+  reportingLeaderId: number | null;
+  reportingLeaderName: string | null;
+  currentStatus: string;
+  statusUpdatedAt: string;
+  profilePictureUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Paginated employee response with new API structure
+ */
+export interface NewPaginatedEmployeeResponse {
+  data: {
+    content: NewEmployeeApiResponse[];
+    pageable: PageableResponse;
+  };
 }
 
 //-----------------------------------------------------------------------------
@@ -571,4 +613,55 @@ export interface EmployeeSuggestParams {
   limit?: number;
   teamId?: number | string;
   strict?: boolean;
+}
+
+/**
+ * New Employee Skill response structure from API
+ */
+export interface NewEmployeeSkillResponse {
+  id: number;
+  employeeId: number;
+  employeeName: string | null;
+  skillId: number;
+  skillName: string;
+  skillCategoryName: string;
+  yearsExperience: number;
+  selfAssessmentLevel: string;
+  leaderAssessmentLevel: string | null;
+  selfComment: string | null;
+  leaderComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * New Paginated Employee Skills response from API
+ */
+export interface NewPaginatedEmployeeSkillsResponse {
+  content: NewEmployeeSkillResponse[];
+  pageable: {
+    sort: {
+      empty: boolean;
+      sorted: boolean;
+      unsorted: boolean;
+    };
+    offset: number;
+    pageNumber: number;
+    pageSize: number;
+    paged: boolean;
+    unpaged: boolean;
+  };
+  last: boolean;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  size: number;
+  number: number;
+  numberOfElements: number;
+  sort: {
+    empty: boolean;
+    sorted: boolean;
+    unsorted: boolean;
+  };
+  empty: boolean;
 } 

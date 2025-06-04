@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePermissions } from '../../../../hooks/usePermissions';
 import { addOpportunityNote } from '../../api';
+import { OpportunityNoteCreateData } from '../../types';
 import { Button, Alert } from '../../../../components/ui';
 
 interface NoteInputFormProps {
@@ -26,7 +27,7 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
 }) => {
   // State
   const [content, setContent] = useState('');
-  const [activityType, setActivityType] = useState('internal-note');
+  const [activityType, setActivityType] = useState('note');
   const [tags, setTags] = useState<string[]>([]);
   const [isInteraction, setIsInteraction] = useState(true);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -69,10 +70,9 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
   /**
    * Submit form data to API
    */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     
-    // Validate
     if (!content.trim()) {
       setError('Vui lòng nhập nội dung ghi chú');
       return;
@@ -87,32 +87,38 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
       setIsSubmitting(true);
       setError(null);
       
-      await addOpportunityNote(opportunityId, {
+      const noteData: OpportunityNoteCreateData = {
         content,
-        attachments,
         type: activityType,
-        tags,
-        isInteraction
-      });
+        tags: tags,
+        isInteraction,
+        activityType: activityType,
+        attachments: attachments
+      };
       
-      // Clear form and draft
+      await addOpportunityNote(opportunityId, noteData);
+      
+      // Reset form sau khi thành công
       setContent('');
-      setActivityType('internal-note');
+      setActivityType('note');
       setTags([]);
       setIsInteraction(true);
       setAttachments([]);
       setIsDirty(false);
+      
+      // Xóa draft
       localStorage.removeItem(`opportunity-note-draft-${opportunityId}`);
       
-      // Collapse form if it was initially collapsed
+      // Thông báo thành công
+      onSuccess();
+      
+      // Thu gọn form nếu đã bung ra tạm thời
       if (!expanded) {
         setIsExpanded(false);
       }
-      
-      // Call success callback
-      onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Không thể thêm ghi chú. Vui lòng thử lại sau.');
+      console.error('Error adding note:', err);
+      setError(err.message || 'Không thể thêm ghi chú, vui lòng thử lại');
     } finally {
       setIsSubmitting(false);
     }
@@ -177,7 +183,7 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
     if (isDirty) {
       if (window.confirm('Bạn có chắc chắn muốn hủy nhập ghi chú này?')) {
         setContent('');
-        setActivityType('internal-note');
+        setActivityType('note');
         setTags([]);
         setIsInteraction(true);
         setAttachments([]);
@@ -244,7 +250,7 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
             className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             disabled={isSubmitting}
           >
-            <option value="internal-note">Ghi chú nội bộ</option>
+            <option value="note">Ghi chú</option>
             <option value="call">Cuộc gọi</option>
             <option value="email">Email</option>
             <option value="meeting">Cuộc họp</option>
@@ -268,13 +274,13 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
           />
         </div>
         
-        {/* Tags */}
-        <div className="mb-4">
+        {/* Tags - Đã ẩn theo yêu cầu */}
+        {/* <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Tags
           </label>
           <div className="flex flex-wrap gap-2">
-            {['Quan trọng', 'Theo dõi', 'Khẩn cấp', 'Tư vấn', 'Demo'].map((tag) => (
+            {['Quan trọng', 'Theo dõi', 'Demo'].map((tag) => (
               <span
                 key={tag}
                 onClick={() => handleTagChange(tag)}
@@ -288,7 +294,7 @@ const NoteInputForm: React.FC<NoteInputFormProps> = ({
               </span>
             ))}
           </div>
-        </div>
+        </div> */}
         
         {/* Update last interaction checkbox */}
         <div className="mb-4 flex items-center">

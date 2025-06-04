@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { employeeService, skillService, teamService } from '../service';
-import { EmployeeListParams, EmployeeResponse, SkillResponse } from '../types';
+import { 
+  EmployeeListParams, 
+  EmployeeResponse, 
+  SkillResponse, 
+  TeamInfo, 
+  SkillCategoryResponse,
+  NewEmployeeApiResponse,
+  NewPaginatedEmployeeResponse
+} from '../types';
 import { Table } from '../../../components/table/Table';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
@@ -26,7 +34,7 @@ import {
 } from 'react-icons/fi';
 
 // Define status types to match API values
-type EmployeeStatus = 'Allocated' | 'Available' | 'EndingSoon' | 'OnLeave' | 'Resigned' | undefined;
+type EmployeeStatus = 'Allocated' | 'Available' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated' | undefined;
 
 /**
  * Employee List Page
@@ -48,9 +56,9 @@ const EmployeeList: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
   
   // State for filter options
-  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [skills, setSkills] = useState<SkillResponse[]>([]);
-  const [skillCategories, setSkillCategories] = useState<{ id: number; name: string }[]>([]);
+  const [skillCategories, setSkillCategories] = useState<SkillCategoryResponse[]>([]);
   
   // State for pagination
   const [pagination, setPagination] = useState({
@@ -164,15 +172,15 @@ const EmployeeList: React.FC = () => {
         } catch (error) {
           console.error('Error loading skills:', error);
           setSkills([]);
+          setError('Không thể tải danh sách kỹ năng. Vui lòng thử lại sau.');
         }
       }
       
       if (typeof skillService.getSkillCategories === 'function') {
         try {
           const categoryData = await skillService.getSkillCategories({ limit: 100 });
-          console.log('Category data:', categoryData);
-          if (categoryData && categoryData.content) {
-            setSkillCategories(categoryData.content);
+          if (categoryData) {
+            setSkillCategories(categoryData.content || []);
           } else {
             console.error('Received empty skill categories data from API');
             setSkillCategories([]);
@@ -180,6 +188,7 @@ const EmployeeList: React.FC = () => {
         } catch (error) {
           console.error('Error loading skill categories:', error);
           setSkillCategories([]);
+          setError('Không thể tải danh sách loại kỹ năng. Vui lòng thử lại sau.');
         }
       }
       
@@ -187,8 +196,8 @@ const EmployeeList: React.FC = () => {
       if (typeof teamService.getTeams === 'function') {
         try {
           const teamData = await teamService.getTeams({ limit: 100 });
-          if (teamData && teamData.content) {
-            setTeams(teamData.content);
+          if (teamData) {
+            setTeams(teamData.content || []);
           } else {
             console.error('Received empty team data from API');
             setTeams([]);
@@ -196,6 +205,7 @@ const EmployeeList: React.FC = () => {
         } catch (error) {
           console.error('Error loading teams:', error);
           setTeams([]);
+          setError('Không thể tải danh sách nhóm. Vui lòng thử lại sau.');
         }
       }
     } catch (error) {
@@ -204,6 +214,7 @@ const EmployeeList: React.FC = () => {
       setSkills([]);
       setSkillCategories([]);
       setTeams([]);
+      setError('Đã xảy ra lỗi khi tải dữ liệu bộ lọc. Vui lòng thử lại sau.');
     }
   };
 
@@ -236,18 +247,71 @@ const EmployeeList: React.FC = () => {
       
       const response = await employeeService.getEmployees(apiFilters);
       
-      setEmployees(response.content || []);
+      // Kiểm tra xem dữ liệu có cấu trúc mới hay không
+      if (response && 'data' in response && response.data && Array.isArray(response.data.content)) {
+        // Đây là cấu trúc mới
+        // Chuyển đổi cấu trúc data mới sang cấu trúc hiển thị
+        const convertedEmployees = response.data.content.map((emp: any) => {
+          // Ánh xạ từ cấu trúc API mới sang cấu trúc hiển thị
+          return {
+            id: emp.id,
+            employeeCode: emp.employeeCode,
+            name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+            email: emp.companyEmail || '',
+            position: emp.position || '',
+            phone: emp.phoneNumber || '',
+            address: emp.address || '',
+            team: emp.team,
+            status: convertStatus(emp.currentStatus),
+            avatarUrl: emp.profilePictureUrl,
+            hireDate: emp.hireDate || '',
+            // Các trường bắt buộc trong EmployeeResponse
+            utilization: 0
+          } as EmployeeResponse;
+        });
+        
+        setEmployees(convertedEmployees);
       setPagination(prev => ({
         ...prev,
-        total: response.pageable.totalElements || 0,
-        totalPages: response.pageable.totalPages || 0
+          total: response.data.pageable.totalElements || 0,
+          totalPages: response.data.pageable.totalPages || 0
       }));
+      } else {
+        // Xử lý cấu trúc dữ liệu khác nếu có
+        const data = response as any;
+        if (data && Array.isArray(data.content)) {
+          setEmployees(data.content);
+          setPagination(prev => ({
+            ...prev,
+            total: data.pageable?.totalElements || 0,
+            totalPages: data.pageable?.totalPages || 0
+          }));
+        } else {
+          // Không có dữ liệu hoặc cấu trúc không xác định
+          setEmployees([]);
+          setError('Định dạng dữ liệu không đúng. Vui lòng liên hệ quản trị viên.');
+        }
+      }
     } catch (error) {
       console.error('Error loading employees:', error);
       setError('Đã xảy ra lỗi khi tải danh sách nhân viên. Vui lòng thử lại sau.');
       setEmployees([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  /**
+   * Convert API status to UI status
+   */
+  const convertStatus = (status: string): 'Allocated' | 'Available' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated' => {
+    switch (status) {
+      case 'Active': return 'Allocated';
+      case 'Available': return 'Available';
+      case 'OnLeave': return 'OnLeave';
+      case 'EndingSoon': return 'EndingSoon';
+      case 'Resigned': return 'Resigned';
+      default: return 'Available'; // Giá trị mặc định an toàn
     }
   };
   
@@ -486,7 +550,6 @@ const EmployeeList: React.FC = () => {
       accessorFn: (row: EmployeeResponse) => row.currentProject,
       cell: ({ getValue, row }: any) => {
         const project = getValue();
-        console.log('Project:', project);
         const employee = row.original;
         
         if (!project) {
@@ -496,23 +559,30 @@ const EmployeeList: React.FC = () => {
           return <span className="text-gray-400 text-sm">N/A</span>;
         }
         
+        // Kiểm tra xem project có phải là object hay string
+        const projectName = typeof project === 'object' ? project.name : project;
+        
         // If we have project details
         return (
           <Tooltip 
             content={
               <div className="max-w-xs">
-                <div className="font-medium">{project.name}</div>
+                <div className="font-medium">{projectName}</div>
+                {typeof project === 'object' && (
+                  <>
                 <div className="text-sm">Khách hàng: {project.client || 'N/A'}</div>
                 <div className="text-sm">Vai trò: {employee.projectRole || 'N/A'}</div>
                 {employee.projectStartDate && (
                   <div className="text-sm">
                     Từ: {new Date(employee.projectStartDate).toLocaleDateString('vi-VN')}
                   </div>
+                    )}
+                  </>
                 )}
               </div>
             }
           >
-            <span className="text-secondary-700">{project}</span>
+            <span className="text-secondary-700">{projectName}</span>
           </Tooltip>
         );
       }
@@ -919,12 +989,12 @@ const EmployeeList: React.FC = () => {
                                 </option>
                               ))
                             : 
-                            <option disabled>No skills in this category</option>
+                            <option disabled>Không có kỹ năng trong danh mục này</option>
                           }
                         </optgroup>
                       ))
                       :
-                      <option disabled>No skill categories available</option>
+                      <option disabled>Không có danh mục kỹ năng</option>
                     }
                   </select>
                   <div className="text-xs text-secondary-500 mt-1">

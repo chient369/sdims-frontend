@@ -75,7 +75,7 @@ const Login: React.FC = () => {
   
   return (
     <div className="flex flex-col items-center justify-center p-6 rounded-lg bg-white shadow-md w-full max-w-md mx-auto">
-      <img src="/logo.png" alt="Company Logo" className="h-12 mb-6" />
+      <img src="../../assets/icon.png" alt="Company Logo" className="h-12 mb-6" />
       
       <h2 className="mb-6 text-center text-2xl font-bold text-secondary-900">Sign In</h2>
       

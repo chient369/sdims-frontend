@@ -229,4 +229,16 @@ export interface CostUpdateResult {
     errorType: string;
     message: string;
   }[];
+}
+
+/**
+ * Team interface
+ */
+export interface Team {
+  id: number;
+  name: string;
+  department?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 } 

@@ -56,6 +56,7 @@ const ContractForm: React.FC = () => {
       salesPersonId: user?.id ? Number(user.id) : 0,
       signDate: new Date().toISOString().split('T')[0],
       startDate: new Date().toISOString().split('T')[0],
+      paymentTerms: []
     },
     mode: 'onChange'
   });
@@ -80,7 +81,7 @@ const ContractForm: React.FC = () => {
   // Xử lý dữ liệu hợp đồng khi tải thành công
   useEffect(() => {
     if (contractData) {
-      const contract = contractData.data.contract;
+      const contract = contractData.data;
       // Map response to form data
       reset({
         contractCode: contract.contractCode,
@@ -192,7 +193,7 @@ const ContractForm: React.FC = () => {
     <ErrorBoundary>
       <div className="flex flex-col min-h-screen bg-gray-50">       
         {/* Header with back button */}
-        <div className="bg-white shadow-sm px-6 py-4 flex items-center border-b border-gray-200">
+        <div className="bg-white shadow-sm px-1 py-4 flex items-center border-b border-gray-200">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -206,7 +207,7 @@ const ContractForm: React.FC = () => {
         </div>
 
         {/* Form content */}
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-24 pt-6 max-w-5xl mx-auto w-full">
+        <div className="w-full">
           <FormProvider {...methods}>
             <form onSubmit={handleSubmit(onSubmit)}>
               <div className="space-y-6">

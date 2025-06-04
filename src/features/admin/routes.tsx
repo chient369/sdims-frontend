@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { Route } from 'react-router-dom';
 import { PrivateRoute } from '../auth/routes';
 
 // Lazy loaded components
@@ -15,95 +16,56 @@ const SystemLogs = lazy(() => import('./pages/SystemLogs'));
 // Define the admin routes
 export const AdminRoutes = [
   {
-    path: "/admin",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.access']}>
-        <AdminDashboard />
-      </PrivateRoute>
-    )
-  },
-  // User Management
-  {
-    path: "/admin/users",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.users.view']}>
-        <UserManagement />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/users/new",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.users.create']}>
-        <UserForm />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/users/:id",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.users.view']}>
-        <UserDetails />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/users/:id/edit",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.users.update']}>
-        <UserForm />
-      </PrivateRoute>
-    )
-  },
-  // Role Management
-  {
-    path: "/admin/roles",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.roles.view']}>
-        <RoleManagement />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/roles/new",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.roles.create']}>
-        <RoleForm />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/roles/:id",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.roles.view']}>
-        <RoleDetails />
-      </PrivateRoute>
-    )
-  },
-  {
-    path: "/admin/roles/:id/edit",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.roles.update']}>
-        <RoleForm />
-      </PrivateRoute>
-    )
-  },
-  // System Configuration
-  {
-    path: "/admin/config",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.config.view']}>
-        <SystemConfig />
-      </PrivateRoute>
-    )
-  },
-  // System Logs
-  {
-    path: "/admin/logs",
-    element: (
-      <PrivateRoute requiredPermissions={['admin.logs.view']}>
-        <SystemLogs />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['admin.access']} />,
+    children: [
+      {
+        path: "/admin",
+        element: <AdminDashboard />
+      },
+      // User Management
+      {
+        path: "/admin/users",
+        element: <UserManagement />
+      },
+      {
+        path: "/admin/users/new",
+        element: <UserForm />
+      },
+      {
+        path: "/admin/users/:id",
+        element: <UserDetails />
+      },
+      {
+        path: "/admin/users/:id/edit",
+        element: <UserForm />
+      },
+      // Role Management
+      {
+        path: "/admin/roles",
+        element: <RoleManagement />
+      },
+      {
+        path: "/admin/roles/new",
+        element: <RoleForm />
+      },
+      {
+        path: "/admin/roles/:id",
+        element: <RoleDetails />
+      },
+      {
+        path: "/admin/roles/:id/edit",
+        element: <RoleForm />
+      },
+      // System Configuration
+      {
+        path: "/admin/config",
+        element: <SystemConfig />
+      },
+      // System Logs
+      {
+        path: "/admin/logs",
+        element: <SystemLogs />
+      }
+    ]
   }
 ]; 

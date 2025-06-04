@@ -29,6 +29,7 @@ import {
   EmployeeSkillsParams,
   EmployeeSkillCreateData,
   EmployeeSkillDeleteResponse,
+  NewPaginatedEmployeeSkillsResponse,
   
   // Team types
   TeamInfo,
@@ -203,7 +204,7 @@ export const getEmployeeProjectHistory = async (
     totalPages: number;
   };
 }> => {
-  return apiClient.get(`/api/v1/employees/${employeeId}/project-history`, {
+  return apiClient.get(`/api/v1/employees/${employeeId}/projects`, {
     ...config,
     params
   });
@@ -334,11 +335,20 @@ export const getEmployeeSkills = async (
   employeeId: string,
   params?: Omit<EmployeeSkillsParams, 'employeeId'>,
   config?: AxiosRequestConfig
-): Promise<EmployeeSkillsResponse> => {
-  return apiClient.get(`/api/v1/employees/${employeeId}/skills`, {
+): Promise<NewPaginatedEmployeeSkillsResponse | EmployeeSkillsResponse> => {
+  const response = await apiClient.get(`/api/v1/employees/${employeeId}/skills`, {
     ...config,
     params
   });
+  
+  // Chuyển đổi response.data thành kiểu phù hợp
+  if (response.data && 'content' in response.data) {
+    // Đây là cấu trúc mới
+    return response.data as NewPaginatedEmployeeSkillsResponse;
+  }
+  
+  // Đây là cấu trúc cũ
+  return response.data as EmployeeSkillsResponse;
 };
 
 /**

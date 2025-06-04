@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -17,10 +17,15 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   // Lấy thông tin quyền từ AuthContext
   const { state, hasPermission: checkPermission } = useAuth();
-  const userPermissions = state.userProfile?.permissions || state.user?.permissions || [];
   
-  // State theo dõi kết quả kiểm tra quyền cho từng menu item
-  const [permissionResults, setPermissionResults] = useState<Record<string, boolean>>({});
+  // Sử dụng useMemo để tránh tính toán lại khi không cần thiết
+  const userPermissions = useMemo(() => 
+    state.userProfile?.permissions || state.user?.permissions || [], 
+    [state.userProfile?.permissions, state.user?.permissions]
+  );
+  
+  // Dùng useRef để theo dõi đã log debug hay chưa
+  const hasLogged = useRef(false);
 
   const menuItems = [
     { name: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', path: '/dashboard', permission: 'dashboard' },
@@ -40,34 +45,31 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const hasPermission = (resource: string): boolean => {
     // Kiểm tra xem người dùng có bất kỳ quyền nào liên quan đến resource này không
     return userPermissions.some(permission => {
-      // Kiểm tra quyền bắt đầu bằng resource
-      return permission.startsWith(`${resource}:`);
+      // Kiểm tra quyền bắt đầu bằng resource hoặc chính xác bằng resource
+      return permission === resource || permission.startsWith(`${resource}:`);
     });
   };
 
-  // Kiểm tra quyền cho tất cả menu items và lưu kết quả
-  useEffect(() => {
-    const results: Record<string, boolean> = {};
-    
-    menuItems.forEach(item => {
-      results[item.name] = hasPermission(item.permission);
-      
-      // In ra thông tin chi tiết để debug
-      console.log(`Menu item: ${item.name}, Permission: ${item.permission}, Has Access: ${results[item.name]}`);
-      
-      // Lọc quyền liên quan đến resource này để debug
-      const relatedPermissions = userPermissions.filter(p => p.startsWith(`${item.permission}:`));
-      console.log(`Related permissions for ${item.name}:`, relatedPermissions);
-    });
-    
-    setPermissionResults(results);
-    
-    // Log tổng hợp kết quả
-    console.log('Permission check results:', results);
-  }, [userPermissions]);
+  // Dùng useMemo để tránh tính toán lại menu items mỗi khi component re-render
+  const filteredMenuItems = useMemo(() => 
+    menuItems.filter(item => hasPermission(item.permission)),
+    [userPermissions] // Chỉ tính toán lại khi userPermissions thay đổi
+  );
 
-  // Lọc menu items dựa trên quyền
-  const filteredMenuItems = menuItems.filter(item => hasPermission(item.permission));
+  // Chỉ log debug một lần khi component mount hoặc userPermissions thay đổi
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('User permissions:', userPermissions);
+      
+      menuItems.forEach(item => {
+        const hasAccess = hasPermission(item.permission);
+        console.log(`Menu item: ${item.name}, Permission: ${item.permission}, Has Access: ${hasAccess}`);
+        
+        const relatedPermissions = userPermissions.filter(p => p === item.permission || p.startsWith(`${item.permission}:`));
+        console.log(`Related permissions for ${item.name}:`, relatedPermissions);
+      });
+    }
+  }, [userPermissions]); // Chỉ chạy lại khi userPermissions thay đổi
 
   return (
     <div 

@@ -6,9 +6,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Input, Button } from '../../../components/ui';
-import { EmployeeMarginListParams, MarginStatusType, PeriodType } from '../types';
+import { EmployeeMarginListParams, MarginStatusType, PeriodType, Team } from '../types';
 import { useAuth } from '../../../hooks/useAuth';
 import { FaFilter } from 'react-icons/fa'; // Import icon for filter button
+import * as api from '../api';
 
 interface MarginFiltersProps {
   filters: EmployeeMarginListParams;
@@ -18,13 +19,7 @@ interface MarginFiltersProps {
   userTeamName?: string;
 }
 
-// Mock data for teams - should be replaced with actual API call
-const TEAMS = [
-  { id: 1, name: 'Team A' },
-  { id: 2, name: 'Team B' },
-  { id: 3, name: 'Team C' }
-];
-
+// Placeholder for teams data that will be loaded from API
 const PERIOD_OPTIONS = [
   { value: 'month', label: 'Tháng' },
   { value: 'quarter', label: 'Quý' },
@@ -39,9 +34,36 @@ const MarginFilters: React.FC<MarginFiltersProps> = ({
   userTeamName
 }) => {
   const { user, hasPermission } = useAuth();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
   
   // Local state for filter values (before applying)
   const [localFilters, setLocalFilters] = useState<Partial<EmployeeMarginListParams>>(filters);
+  
+  // Fetch teams data from API
+  useEffect(() => {
+    const fetchTeams = async () => {
+      setIsLoadingTeams(true);
+      setTeamsError(null);
+      
+      try {
+        const response = await api.getTeams();
+        if (response.status === 'success' && response.data.content) {
+          setTeams(response.data.content);
+        } else {
+          setTeamsError('Không thể tải dữ liệu teams');
+        }
+      } catch (error) {
+        console.error('Error fetching teams:', error);
+        setTeamsError('Lỗi khi tải dữ liệu teams');
+      } finally {
+        setIsLoadingTeams(false);
+      }
+    };
+    
+    fetchTeams();
+  }, []);
   
   // Determine user access level - use prop if provided, otherwise compute
   const accessScope = useMemo(() => {
@@ -189,6 +211,32 @@ const MarginFilters: React.FC<MarginFiltersProps> = ({
     { value: 'Green' as MarginStatusType, label: 'Đạt yêu cầu' }
   ];
   
+  // Render team dropdown content based on loading/error state
+  const renderTeamDropdown = () => {
+    if (isLoadingTeams) {
+      return <div className="block w-full py-2 text-sm text-gray-500">Đang tải...</div>;
+    }
+    
+    if (teamsError) {
+      return <div className="block w-full py-2 text-sm text-red-500">{teamsError}</div>;
+    }
+    
+    return (
+      <select
+        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        value={localFilters.teamId || ''}
+        onChange={(e) => handleInputChange('teamId', e.target.value ? Number(e.target.value) : undefined)}
+      >
+        <option value="">Tất cả các team</option>
+        {teams.map(team => (
+          <option key={team.id} value={team.id}>
+            {team.name}
+          </option>
+        ))}
+      </select>
+    );
+  };
+  
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
@@ -305,18 +353,7 @@ const MarginFilters: React.FC<MarginFiltersProps> = ({
               {userTeamName || (user?.teams && user.teams.length > 0 ? user.teams[0].name : 'Không có')}
             </div>
           ) : (
-            <select
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={localFilters.teamId || ''}
-              onChange={(e) => handleInputChange('teamId', e.target.value ? Number(e.target.value) : undefined)}
-            >
-              <option value="">Tất cả các team</option>
-              {TEAMS.map(team => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+            renderTeamDropdown()
           )}
         </div>
         

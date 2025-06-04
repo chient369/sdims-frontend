@@ -730,7 +730,7 @@ const EmployeeDetail: React.FC = () => {
             {/* Avatar section */}
             <div className="flex flex-col items-center">
               <div className="w-32 h-32 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-5xl font-bold">
-                {employee.name.charAt(0)}
+                {employee.name?.charAt(0)}
               </div>
               <div className="text-sm text-gray-500 text-center mt-2">Mã NV: {employee.employeeCode}</div>
               <div className="mt-2">

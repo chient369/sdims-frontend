@@ -107,21 +107,37 @@ const MarginList = () => {
   const fetchMarginData = async () => {
     setLoading(true);
     setError(null);
-    
+  
     try {
       const response = await getEmployeeMargins({
         ...filters,
         page: filters.page
       });
       
-      setEmployeeMargins(response.content);
-      setSummary(response.summary);
-      setPagination({
-        pageNumber: response.pageable.pageNumber - 1, // API starts at 1, but component at 0
-        pageSize: response.pageable.pageSize,
-        totalPages: response.pageable.totalPages,
-        totalElements: response.pageable.totalElements
-      });
+      // Kiểm tra format response (có thể là định dạng mới hoặc cũ)
+      if (response.status === 'success' && response.data) {
+        // Định dạng mới: { status, code, data: { content, summary, pageable } }
+        setEmployeeMargins(response.data.content);
+        setSummary(response.data.summary);
+        setPagination({
+          pageNumber: response.data.pageable.pageNumber - 1, // API starts at 1, but component at 0
+          pageSize: response.data.pageable.pageSize,
+          totalPages: response.data.pageable.totalPages,
+          totalElements: response.data.pageable.totalElements
+        });
+      } else if (response.content && response.summary && response.pageable) {
+        // Định dạng cũ: { content, summary, pageable }
+        setEmployeeMargins(response.content);
+        setSummary(response.summary);
+        setPagination({
+          pageNumber: response.pageable.pageNumber - 1,
+          pageSize: response.pageable.pageSize,
+          totalPages: response.pageable.totalPages,
+          totalElements: response.pageable.totalElements
+        });
+      } else {
+        setError('Dữ liệu phản hồi không hợp lệ');
+      }
     } catch (err) {
       console.error('Failed to fetch margin data:', err);
       setError('Không thể tải dữ liệu margin. Vui lòng thử lại sau.');

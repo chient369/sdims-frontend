@@ -16,38 +16,33 @@ const ExecutiveReport = lazy(() => import('./pages/ExecutiveReport'));
 
 // Define reports routes with permission check
 export const ReportsRoutes = [
-  // Trang danh sách báo cáo - yêu cầu ít nhất một trong các quyền đọc báo cáo
+  // Trang danh sách báo cáo và Report Viewer
   {
-    path: "/reports",
     element: (
       <PrivateRoute 
         requiredPermissions={["report:read", "report:read:all", "report:read:team", "report:read:own"]}
         requireAll={false}
-      >
-        <ReportListPage />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports",
+        element: <ReportListPage />
+      },
+      {
+        path: "/reports/:reportId",
+        element: <ReportViewerPage />
+      },
+      // Redirect from the legacy URL to the new reports page if needed
+      {
+        path: "/reporting",
+        element: <Navigate to="/reports" replace />
+      }
+    ]
   },
-  // Route cho Report Viewer - kiểm tra quyền tương tự
-  {
-    path: "/reports/:reportId",
-    element: (
-      <PrivateRoute 
-        requiredPermissions={["report:read", "report:read:all", "report:read:team", "report:read:own"]}
-        requireAll={false}
-      >
-        <ReportViewerPage />
-      </PrivateRoute>
-    )
-  },
-  // Redirect from the legacy URL to the new reports page if needed
-  {
-    path: "/reporting",
-    element: <Navigate to="/reports" replace />
-  },
+
   // Route cho báo cáo nhân sự - yêu cầu quyền đọc nhân sự
   {
-    path: "/reports/employees",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -61,14 +56,18 @@ export const ReportsRoutes = [
           "employees:read" // Thêm định dạng quyền đơn giản
         ]}
         requireAll={false}
-      >
-        <EmployeeReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/employees",
+        element: <EmployeeReport />
+      }
+    ]
   },
+
   // Route cho báo cáo margin - yêu cầu quyền đọc margin
   {
-    path: "/reports/margins",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -79,14 +78,18 @@ export const ReportsRoutes = [
           "report:read:all"
         ]}
         requireAll={false}
-      >
-        <MarginReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/margins",
+        element: <MarginReport />
+      }
+    ]
   },
+
   // Route cho báo cáo cơ hội - yêu cầu quyền đọc cơ hội
   {
-    path: "/reports/opportunities",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -99,14 +102,18 @@ export const ReportsRoutes = [
           "opportunity-followup:read:all"
         ]}
         requireAll={false}
-      >
-        <OpportunityReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/opportunities",
+        element: <OpportunityReport />
+      }
+    ]
   },
+
   // Route cho báo cáo hợp đồng - yêu cầu quyền đọc hợp đồng
   {
-    path: "/reports/contracts",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -118,14 +125,18 @@ export const ReportsRoutes = [
           "report:read:team"
         ]}
         requireAll={false}
-      >
-        <ContractReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/contracts",
+        element: <ContractReport />
+      }
+    ]
   },
+
   // Route cho báo cáo thanh toán - yêu cầu quyền đọc thanh toán
   {
-    path: "/reports/payments",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -139,14 +150,18 @@ export const ReportsRoutes = [
           "report:read:team"
         ]}
         requireAll={false}
-      >
-        <PaymentReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/payments",
+        element: <PaymentReport />
+      }
+    ]
   },
+
   // Route cho báo cáo KPI - yêu cầu quyền đọc KPI
   {
-    path: "/reports/kpi",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -159,14 +174,18 @@ export const ReportsRoutes = [
           "report:read:team"
         ]}
         requireAll={false}
-      >
-        <KpiReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/kpi",
+        element: <KpiReport />
+      }
+    ]
   },
+
   // Route cho báo cáo sử dụng - yêu cầu quyền đọc utilization
   {
-    path: "/reports/utilization",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -176,14 +195,18 @@ export const ReportsRoutes = [
           "report:read:team"
         ]}
         requireAll={false}
-      >
-        <UtilizationReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/utilization",
+        element: <UtilizationReport />
+      }
+    ]
   },
+
   // Route cho báo cáo điều hành - yêu cầu quyền đọc dashboard
   {
-    path: "/reports/executive",
     element: (
       <PrivateRoute 
         requiredPermissions={[
@@ -198,9 +221,13 @@ export const ReportsRoutes = [
           "report:read:team"
         ]}
         requireAll={false}
-      >
-        <ExecutiveReport />
-      </PrivateRoute>
-    )
+      />
+    ),
+    children: [
+      {
+        path: "/reports/executive",
+        element: <ExecutiveReport />
+      }
+    ]
   }
 ]; 

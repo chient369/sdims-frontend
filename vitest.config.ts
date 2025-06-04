@@ -28,6 +28,6 @@ export default defineConfig({
       '@config': resolve(__dirname, './src/config'),
       '@routes': resolve(__dirname, './src/routes'),
       '@assets': resolve(__dirname, './src/assets')
-    }
-  },
+    },
+  }
 }); 

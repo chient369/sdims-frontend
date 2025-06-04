@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/Card';
 import { PermissionGuard } from '@components/ui';
@@ -57,10 +57,35 @@ const Dashboard: React.FC = () => {
     canViewDebtWidget,
     canViewSalesFunnelWidget
   } = useDashboardPermissions();
+
+  // Memoize permission checks để tránh tính toán lại khi component re-render
+  const permissionChecks = useMemo(() => ({
+    canViewEmployees: canViewEmployeeWidgets(),
+    canViewUtilization: canViewUtilizationWidget()
+  }), [canViewEmployeeWidgets, canViewUtilizationWidget]);
   
-  // Tải dữ liệu HR metrics
+  // Tạo hàm fetchDashboardData bên ngoài useEffect để sử dụng với useCallback
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Thêm teamId vào params nếu đã chọn
+      const params = { 
+        timeframe,
+        teamId: selectedTeamId || undefined
+      };
+      const data = await getDashboardSummary(params);
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [timeframe, selectedTeamId]);
+
+  // Tạo hàm fetchHRData bên ngoài useEffect để sử dụng với useCallback
   const fetchHRData = useCallback(async () => {
-    if (!canViewEmployeeWidgets() && !canViewUtilizationWidget()) {
+    // Kiểm tra quyền trước khi fetch dữ liệu
+    if (!permissionChecks.canViewEmployees && !permissionChecks.canViewUtilization) {
       return;
     }
     
@@ -68,15 +93,19 @@ const Dashboard: React.FC = () => {
     
     try {
       // Tải dữ liệu nhân viên sẵn sàng (bench)
-      if (canViewEmployeeWidgets()) {
+      if (permissionChecks.canViewEmployees) {
         const today = new Date();
         const startDateStr = today.toISOString().split('T')[0];
         
-        const availableData = await getAvailableEmployees({
-          startDate: startDateStr
-        });
-        
-        setAvailableEmployees(availableData || []);
+        try {
+          const availableData = await getAvailableEmployees({
+            startDate: startDateStr
+          });
+          setAvailableEmployees(availableData || []);
+        } catch (error) {
+          console.error('Error fetching available employees:', error);
+          setAvailableEmployees([]);
+        }
         
         // Mock data cho nhân viên sắp hết dự án
         const mockEndingSoon = [
@@ -120,7 +149,7 @@ const Dashboard: React.FC = () => {
       }
       
       // Tải dữ liệu utilization rate
-      if (canViewUtilizationWidget()) {
+      if (permissionChecks.canViewUtilization) {
         const today = new Date();
         let fromDate = new Date(today);
         
@@ -150,15 +179,12 @@ const Dashboard: React.FC = () => {
             period: timeframe,
           });
           
-          // Nếu response là Blob, đó là export - chúng ta không xử lý
           if (!(response instanceof Blob)) {
             setUtilizationRate(response.summary.averageUtilization);
             setUtilizationChange(5); // Mock data - thay đổi so với kỳ trước
           }
         } catch (error) {
           console.error('Error fetching utilization data:', error);
-          
-          // Giá trị mặc định nếu API lỗi
           setUtilizationRate(78);
           setUtilizationChange(2);
         }
@@ -168,30 +194,17 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoadingHR(false);
     }
-  }, [canViewEmployeeWidgets, canViewUtilizationWidget, selectedTeamId, timeframe]);
-  
-  // Load dashboard data khi timeframe hoặc selectedTeamId thay đổi
+  }, [timeframe, selectedTeamId, permissionChecks.canViewEmployees, permissionChecks.canViewUtilization]);
+
+  // Load data khi component mount hoặc khi dependencies thay đổi
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        // Thêm teamId vào params nếu đã chọn
-        const params = { 
-          timeframe,
-          teamId: selectedTeamId || undefined
-        };
-        const data = await getDashboardSummary(params);
-        setDashboardData(data);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Tải dữ liệu HR trong useEffect riêng biệt
+  useEffect(() => {
     fetchHRData();
-  }, [timeframe, selectedTeamId, fetchHRData]);
+  }, [fetchHRData]);
   
   const handleTimeframeChange = (newTimeframe: 'week' | 'month' | 'quarter' | 'year') => {
     setTimeframe(newTimeframe);

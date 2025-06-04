@@ -5,11 +5,11 @@ export interface OpportunityListParams {
   page?: number;
   limit?: number;
   keyword?: string;
-  dealStage?: string;
-  clientId?: string;
+  status?: string;
+  customerName?: string;
   assignedToId?: string;
   followupStatus?: 'Red' | 'Yellow' | 'Green';
-  onsitePriority?: boolean;
+  priority?: boolean;
   createdDateFrom?: string;
   createdDateTo?: string;
   lastInteractionFrom?: string;
@@ -19,39 +19,56 @@ export interface OpportunityListParams {
 }
 
 /**
+ * Employee Assignment structure
+ */
+export interface EmployeeAssignment {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  employeeCode: string;
+  assignedAt: string;
+}
+
+/**
  * Opportunity data structure
  */
 export interface OpportunityResponse {
-  id: string;
-  opportunityCode: string;
+  id: number;
+  code: string;
   name: string;
-  client: {
-    id: string;
-    name: string;
-  };
-  estimatedValue: number;
-  currency: string;
-  dealStage: string;
-  probability: number;
-  expectedCloseDate: string;
   description?: string;
-  createdBy: {
-    id: string;
+  customerName: string;
+  customerContact?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  dealSize?: string;
+  source?: string;
+  externalId?: string;
+  closingDate?: string | null;
+  closingProbability?: number | null;
+  createdBy?: {
+    id: number;
     name: string;
+    email?: string | null;
+    phone?: string | null;
+    position?: string | null;
   };
   assignedTo?: {
-    id: string;
+    id: number;
     name: string;
-    teamId?: string;
-    teamName?: string;
-  }[];
+    email?: string | null;
+    phone?: string | null;
+    position?: string | null;
+  };
+  employeeAssignments?: EmployeeAssignment[];
+  lastInteractionDate?: string;
+  priority: boolean;
   createdAt: string;
   updatedAt: string;
-  lastInteractionDate?: string;
-  followupStatus: 'Red' | 'Yellow' | 'Green';
-  onsitePriority: boolean;
-  hubspotId?: string;
-  hubspotLastSynced?: string;
+  tags?: string[];
 }
 
 /**
@@ -80,13 +97,19 @@ export interface OpportunityUpdateData extends Partial<OpportunityCreateData> {}
 export interface OpportunityNoteResponse {
   id: string;
   opportunityId: string;
+  authorId?: string;
+  authorName?: string;
   content: string;
-  createdBy: {
+  activityType?: string;
+  meetingDate?: string | null;
+  isPrivate?: boolean;
+  createdBy?: {
     id: string;
     name: string;
   };
   createdAt: string;
   updatedAt?: string;
+  tags?: string[];
   attachments?: {
     id: string;
     fileName: string;
@@ -103,6 +126,7 @@ export interface OpportunityNoteCreateData {
   content: string;
   attachments?: File[];
   type?: string;
+  activityType?: string;
   tags?: string[];
   isInteraction?: boolean;
 }
@@ -153,4 +177,45 @@ export interface OpportunityAttachmentListParams {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+}
+
+/**
+ * API response structure for opportunity list
+ */
+export interface OpportunityListResponse {
+  status: string;
+  code: number;
+  errorCode: null | string;
+  data: {
+    summary: {
+      totalCount: number;
+      totalAmount: number;
+      byStatus: Record<string, number>;
+      byDealSize: Record<string, number>;
+    };
+    content: OpportunityResponse[];
+    pageable: {
+      pageNumber: number;
+      pageSize: number;
+      totalPages: number;
+      totalElements: number;
+      sort: string;
+    };
+  };
+  errors: null | any[];
+  message: null | string;
+}
+
+/**
+ * API response chuẩn cho chi tiết cơ hội (Opportunity Detail)
+ */
+export interface NewOpportunityResponse {
+  status: string;
+  code: number;
+  data: {
+    opportunity: OpportunityResponse;
+    notes: OpportunityNoteResponse[];
+    history: any[];
+    suggestedResources?: any[];
+  };
 } 

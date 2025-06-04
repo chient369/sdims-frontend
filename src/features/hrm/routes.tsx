@@ -9,58 +9,44 @@ const SkillsManagement = lazy(() => import('./pages/SkillsManagement'));
 
 // Define the HRM routes
 export const HRMRoutes = [
-  // Danh sách nhân viên
   {
-    path: "/hrm/employees",
-    element: (
-      <PrivateRoute>
-        <EmployeeList />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute />,
+    children: [
+      // Danh sách nhân viên
+      {
+        path: "/hrm/employees",
+        element: <EmployeeList />
+      },
+      // Tạo mới nhân viên
+      {
+        path: "/hrm/employees/create",
+        element: <EmployeeFormPage />
+      },
+      // Chỉnh sửa thông tin nhân viên
+      {
+        path: "/hrm/employees/:id/edit",
+        element: <EmployeeFormPage />
+      },
+      // Chi tiết nhân viên
+      {
+        path: "/hrm/employees/:id",
+        element: <EmployeeDetail />
+      },
+      // Root redirect to employee list
+      {
+        path: "/hrm",
+        element: <EmployeeList />
+      }
+    ]
   },
-  // Tạo mới nhân viên
+  // Quản lý Skills - cần quyền riêng nên tạo route riêng
   {
-    path: "/hrm/employees/create",
-    element: (
-      <PrivateRoute>
-        <EmployeeFormPage />
-      </PrivateRoute>
-    )
-  },
-  // Chỉnh sửa thông tin nhân viên
-  {
-    path: "/hrm/employees/:id/edit",
-    element: (
-      <PrivateRoute>
-        <EmployeeFormPage />
-      </PrivateRoute>
-    )
-  },
-  // Chi tiết nhân viên
-  {
-    path: "/hrm/employees/:id",
-    element: (
-      <PrivateRoute>
-        <EmployeeDetail />
-      </PrivateRoute>
-    )
-  },
-  // Quản lý Skills
-  {
-    path: "/hrm/skills",
-    element: (
-      <PrivateRoute requiredPermissions={['skill-category:read']}>
-        <SkillsManagement />
-      </PrivateRoute>
-    )
-  },
-  // Root redirect to employee list
-  {
-    path: "/hrm",
-    element: (
-      <PrivateRoute>
-        <EmployeeList />
-      </PrivateRoute>
-    )
+    element: <PrivateRoute requiredPermissions={['skill-category:read']} />,
+    children: [
+      {
+        path: "/hrm/skills",
+        element: <SkillsManagement />
+      }
+    ]
   }
 ]; 

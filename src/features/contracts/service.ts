@@ -105,7 +105,22 @@ class ContractService extends BaseApiService {
   /**
    * Get payment schedule for contract
    */
-  async getPaymentSchedule(contractId: string): Promise<PaymentTerm[]> {
+  async getPaymentSchedule(contractId: string): Promise<{
+    status: string;
+    code: number;
+    data: Array<{
+      id: number;
+      termNumber: number;
+      dueDate: string;
+      amount: number;
+      percentage: number;
+      description: string;
+      status: string;
+      paidDate: string | null;
+      paidAmount: number | null;
+      notes: string | null;
+    }>;
+  }> {
     const response = await api.get(`${this.endpoint}/${contractId}/payment-terms`);
     return response.data;
   }

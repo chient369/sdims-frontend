@@ -6,7 +6,8 @@ import {
   OpportunityUpdateData,
   OpportunityNoteResponse,
   OpportunityNoteCreateData,
-  SyncLogResponse
+  SyncLogResponse,
+  OpportunityListResponse
 } from '../features/opportunities/types';
 import * as opportunityApi from '../features/opportunities/api';
 
@@ -14,7 +15,15 @@ import * as opportunityApi from '../features/opportunities/api';
 export function useOpportunities(params?: OpportunityListParams) {
   return useQuery({
     queryKey: ['opportunities', params],
-    queryFn: () => opportunityApi.getOpportunities(params),
+    queryFn: async () => {
+      const response = await opportunityApi.getOpportunities(params);
+      
+      // Đảm bảo dữ liệu được trả về đúng định dạng
+      return {
+        data: response.data,
+        meta: response.meta
+      };
+    },
     retry: false,
     refetchOnWindowFocus: false
   });
@@ -146,9 +155,9 @@ export function usePriorityOpportunities(params?: { limit?: number }) {
   return useQuery({
     queryKey: ['priority-opportunities', params],
     queryFn: () => {
-      // Filter opportunities with onsitePriority=true
+      // Filter opportunities with priority=true
       return opportunityApi.getOpportunities({ 
-        onsitePriority: true,
+        priority: true,
         limit: params?.limit
       });
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '../../../../components/ui';
 
 interface FilterProps {
@@ -35,8 +35,8 @@ const AdvancedFiltering: React.FC<FilterProps> = ({
   });
   const [activeFilterCount, setActiveFilterCount] = useState(0);
   
-  // Calculate active filter count
-  useEffect(() => {
+  // Calculate active filter count using useMemo
+  const calculatedFilterCount = useMemo(() => {
     let count = 0;
     
     if (filters.activityTypes && filters.activityTypes.length > 0) count++;
@@ -45,49 +45,87 @@ const AdvancedFiltering: React.FC<FilterProps> = ({
     if (filters.tags && filters.tags.length > 0) count++;
     if (filters.searchText) count++;
     
-    setActiveFilterCount(count);
+    return count;
   }, [filters]);
   
+  // Update activeFilterCount when calculatedFilterCount changes
+  useEffect(() => {
+    setActiveFilterCount(calculatedFilterCount);
+  }, [calculatedFilterCount]);
+  
   // Handle filter changes and notify parent component
-  const handleFilterChange = (newFilters: Partial<FilterValues>) => {
-    const updatedFilters = { ...filters, ...newFilters };
-    setFilters(updatedFilters);
-    
-    // Save filters to sessionStorage
-    sessionStorage.setItem('opportunityNotesFilters', JSON.stringify(updatedFilters));
-    
-    // Notify parent component
-    onFilterChange(updatedFilters);
-  };
+  const handleFilterChange = useCallback((newFilters: Partial<FilterValues>) => {
+    setFilters(prevFilters => {
+      const updatedFilters = { ...prevFilters, ...newFilters };
+      
+      // Save filters to sessionStorage
+      sessionStorage.setItem('opportunityNotesFilters', JSON.stringify(updatedFilters));
+      
+      // Notify parent component
+      onFilterChange(updatedFilters);
+      
+      return updatedFilters;
+    });
+  }, [onFilterChange]);
   
   // Toggle activity type filter
-  const toggleActivityType = (type: string) => {
-    const currentTypes = filters.activityTypes || [];
-    const newTypes = currentTypes.includes(type)
-      ? currentTypes.filter(t => t !== type)
-      : [...currentTypes, type];
-    
-    handleFilterChange({ activityTypes: newTypes });
-  };
+  const toggleActivityType = useCallback((type: string) => {
+    setFilters(prevFilters => {
+      const currentTypes = prevFilters.activityTypes || [];
+      const newTypes = currentTypes.includes(type)
+        ? currentTypes.filter(t => t !== type)
+        : [...currentTypes, type];
+      
+      const updatedFilters = { ...prevFilters, activityTypes: newTypes };
+      
+      // Save filters to sessionStorage
+      sessionStorage.setItem('opportunityNotesFilters', JSON.stringify(updatedFilters));
+      
+      // Notify parent component
+      onFilterChange(updatedFilters);
+      
+      return updatedFilters;
+    });
+  }, [onFilterChange]);
   
   // Handle date range change
-  const handleDateChange = (field: 'from' | 'to', value: string) => {
-    const date = value ? new Date(value) : null;
-    const newDateRange = {
-      from: field === 'from' ? date : (filters.dateRange?.from || null),
-      to: field === 'to' ? date : (filters.dateRange?.to || null)
-    };
-    
-    handleFilterChange({ dateRange: newDateRange });
-  };
+  const handleDateChange = useCallback((field: 'from' | 'to', value: string) => {
+    setFilters(prevFilters => {
+      const date = value ? new Date(value) : null;
+      const newDateRange = {
+        from: field === 'from' ? date : (prevFilters.dateRange?.from || null),
+        to: field === 'to' ? date : (prevFilters.dateRange?.to || null)
+      };
+      
+      const updatedFilters = { ...prevFilters, dateRange: newDateRange };
+      
+      // Save filters to sessionStorage
+      sessionStorage.setItem('opportunityNotesFilters', JSON.stringify(updatedFilters));
+      
+      // Notify parent component
+      onFilterChange(updatedFilters);
+      
+      return updatedFilters;
+    });
+  }, [onFilterChange]);
   
   // Handle search text change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFilterChange({ searchText: e.target.value });
-  };
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters(prevFilters => {
+      const updatedFilters = { ...prevFilters, searchText: e.target.value };
+      
+      // Save filters to sessionStorage
+      sessionStorage.setItem('opportunityNotesFilters', JSON.stringify(updatedFilters));
+      
+      // Notify parent component
+      onFilterChange(updatedFilters);
+      
+      return updatedFilters;
+    });
+  }, [onFilterChange]);
   
   // Clear all filters
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     const emptyFilters: FilterValues = {
       activityTypes: [],
       dateRange: { from: null, to: null },
@@ -99,12 +137,12 @@ const AdvancedFiltering: React.FC<FilterProps> = ({
     setFilters(emptyFilters);
     sessionStorage.removeItem('opportunityNotesFilters');
     onFilterChange(emptyFilters);
-  };
+  }, [onFilterChange]);
   
   // Toggle filter panel expansion
-  const toggleExpand = () => {
-    setExpanded(!expanded);
-  };
+  const toggleExpand = useCallback(() => {
+    setExpanded(prev => !prev);
+  }, []);
   
   // Load saved filters from sessionStorage on mount
   useEffect(() => {
@@ -115,10 +153,11 @@ const AdvancedFiltering: React.FC<FilterProps> = ({
         
         // Convert date strings back to Date objects
         if (parsedFilters.dateRange) {
-          parsedFilters.dateRange = {
-            from: parsedFilters.dateRange.from ? new Date(parsedFilters.dateRange.from) : null,
-            to: parsedFilters.dateRange.to ? new Date(parsedFilters.dateRange.to) : null
+          const dateRange = {
+            from: parsedFilters.dateRange.from ? new Date(parsedFilters.dateRange.from as any) : null,
+            to: parsedFilters.dateRange.to ? new Date(parsedFilters.dateRange.to as any) : null
           };
+          parsedFilters.dateRange = dateRange;
         }
         
         setFilters(parsedFilters);
@@ -127,7 +166,7 @@ const AdvancedFiltering: React.FC<FilterProps> = ({
         console.error('Error parsing saved filters:', error);
       }
     }
-  }, [onFilterChange]);
+  }, []); // Run only once on mount
   
   return (
     <div className="bg-white rounded-lg shadow mb-6">

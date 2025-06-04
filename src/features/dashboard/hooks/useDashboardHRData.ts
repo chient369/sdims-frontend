@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAvailableEmployees } from '../../hrm/api';
 import { getUtilizationReport } from '../../reports/api';
-import { EmployeeStatusWidget, UtilizationRateWidget } from '../types';
 
 interface UseDashboardHRDataParams {
   teamId?: string | null;
@@ -42,52 +40,6 @@ export const useDashboardHRData = ({ teamId, timeframe }: UseDashboardHRDataPara
         return response;
       } catch (error) {
         console.error('Error fetching available employees:', error);
-        
-        // Trả về mock data nếu API lỗi
-        const mockAvailableEmployees = [
-          {
-            id: '201',
-            employeeCode: 'EMP001',
-            name: 'Đỗ Tiến E',
-            email: 'e.do@company.com',
-            position: 'Developer',
-            team: { id: '1', name: 'Team Alpha' },
-            status: 'Available',
-            utilization: 0,
-            joinDate: '2023-01-15'
-          },
-          {
-            id: '202',
-            employeeCode: 'EMP002',
-            name: 'Hoàng Thị F',
-            email: 'f.hoang@company.com',
-            position: 'QA Engineer',
-            team: { id: '3', name: 'Team Gamma' },
-            status: 'Available',
-            utilization: 0,
-            joinDate: '2023-03-10'
-          },
-          {
-            id: '203',
-            employeeCode: 'EMP003',
-            name: 'Ngô Văn G',
-            email: 'g.ngo@company.com',
-            position: 'Designer',
-            team: { id: '2', name: 'Team Beta' },
-            status: 'Available',
-            utilization: 0,
-            joinDate: '2023-05-20'
-          }
-        ];
-        
-        // Filter theo teamId nếu có
-        if (teamId) {
-          return mockAvailableEmployees.filter(emp => 
-            emp.team.id === teamId
-          );
-        }
-        
-        return mockAvailableEmployees;
       }
     },
     enabled: true,
@@ -112,44 +64,6 @@ export const useDashboardHRData = ({ teamId, timeframe }: UseDashboardHRDataPara
       const thirtyDaysLater = new Date(today);
       thirtyDaysLater.setDate(today.getDate() + 30);
       
-      // Mock API call tạm thời - trong thực tế thay bằng API call thực
-      const mockEndingSoon: EndingSoonEmployee[] = [
-        {
-          id: '101',
-          fullName: 'Nguyễn Văn A',
-          teamName: 'Team Alpha',
-          projectEndDate: '2025-07-05'
-        },
-        {
-          id: '102',
-          fullName: 'Trần Thị B',
-          teamName: 'Team Beta',
-          projectEndDate: '2025-07-15'
-        },
-        {
-          id: '103',
-          fullName: 'Lê Văn C',
-          teamName: 'Team Alpha',
-          projectEndDate: '2025-07-22'
-        },
-        {
-          id: '104',
-          fullName: 'Phạm Thị D',
-          teamName: 'Team Gamma',
-          projectEndDate: '2025-07-28'
-        }
-      ];
-      
-      // Filter theo teamId nếu có
-      if (teamId) {
-        return mockEndingSoon.filter(emp => 
-          emp.teamName === (teamId === '1' ? 'Team Alpha' : 
-                          teamId === '2' ? 'Team Beta' : 
-                          teamId === '3' ? 'Team Gamma' : '')
-        );
-      }
-      
-      return mockEndingSoon;
     },
     enabled: true,
     staleTime: 5 * 60 * 1000, // 5 phút

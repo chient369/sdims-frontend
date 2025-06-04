@@ -207,6 +207,7 @@ export interface EmployeeAssignment {
   endDate?: string;
   allocationPercentage: number;
   billRate: number;
+  role?: string;
 }
 
 /**
@@ -245,6 +246,7 @@ export interface ContractCreateData {
   status: ContractStatus;
   salesPersonId: number;
   description?: string;
+  paymentTerms?: PaymentTerm[];
   // Tùy chọn khác nếu có
 }
 

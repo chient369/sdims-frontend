@@ -20,9 +20,26 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '../../../components/
 import { FileUploader, FileList, FileInfo, FilePreview, FileViewer } from '../../../components/files';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { formatDate, formatCurrency } from '../../../utils/formatters';
-import { OpportunityResponse, OpportunityNoteResponse, OpportunityAttachment } from '../types';
+import { OpportunityNoteResponse, OpportunityAttachment, NewOpportunityResponse, EmployeeAssignment } from '../types';
 import AssignLeaderModal from './AssignLeaderModal';
 import { NoteInputForm, ActivityTimeline, AdvancedFiltering, FilterValues } from './notes';
+import { useNotifications } from '../../../context/NotificationContext';
+
+/**
+ * Get the most recently assigned employee from employeeAssignments
+ * @param employeeAssignments Array of employee assignments
+ * @returns The most recently assigned employee or null if no assignments
+ */
+const getLatestAssignedEmployee = (employeeAssignments?: EmployeeAssignment[]): EmployeeAssignment | null => {
+  if (!employeeAssignments || employeeAssignments.length === 0) {
+    return null;
+  }
+  
+  // Sort by assignedAt in descending order (newest first) and return the first one
+  return [...employeeAssignments].sort((a, b) => 
+    new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime()
+  )[0];
+};
 
 /**
  * Opportunity Detail Page component
@@ -33,14 +50,13 @@ const OpportunityDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = usePermissions();
+  const { showToast } = useNotifications();
   
   // State
-  const [opportunity, setOpportunity] = useState<OpportunityResponse | null>(null);
-  const [notes, setNotes] = useState<OpportunityNoteResponse[]>([]);
+  const [opportunity, setOpportunity] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'info' | 'notes' | 'files'>('info');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notesLoading, setNotesLoading] = useState(false);
   const [filesLoading, setFilesLoading] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({});
@@ -54,48 +70,106 @@ const OpportunityDetail = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingFile, setDeletingFile] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [notes, setNotes] = useState<OpportunityNoteResponse[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [notesPage, setNotesPage] = useState<number>(1);
+  const [notesHasMore, setNotesHasMore] = useState<boolean>(true);
+
+  // Ref để kiểm soát việc fetch
+  const isFetchingRef = useRef(false);
 
   // Fetch opportunity data
   const fetchOpportunity = useCallback(async () => {
+    // Ngăn chặn việc fetch nhiều lần
+    if (isFetchingRef.current || !id) return;
+
     try {
+      isFetchingRef.current = true;
       setLoading(true);
-      if (!id) {
-        setError('Không tìm thấy ID cơ hội');
-        return;
+      
+      const response = await getOpportunityById(id);
+      
+      // Xử lý nhiều định dạng API response khác nhau
+      if (response && typeof response === 'object') {
+        if ('status' in response && response.status === 'success' && 'data' in response) {
+          // API mới trả về response.data.opportunity
+          if (response.data && typeof response.data === 'object' && 'opportunity' in response.data) {
+            setOpportunity(response.data.opportunity);
+          } else {
+            setOpportunity(response.data);
+          }
+        } else if ('opportunity' in response) {
+          // Định dạng cũ trả về response.opportunity
+          setOpportunity(response.opportunity);
+        } else {
+          // Trả về toàn bộ response nếu không khớp với các cấu trúc đã biết
+          setOpportunity(response);
+        }
+      } else {
+        setOpportunity(response);
       }
       
-      const data = await getOpportunityById(id);
-      setOpportunity(data);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Không thể tải thông tin cơ hội');
       console.error('Error fetching opportunity:', err);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, [id]);
 
-  // Fetch notes
-  const fetchNotes = useCallback(async () => {
-    if (!id) return;
+  // Fetch opportunity notes
+  const fetchOpportunityNotes = useCallback(async (page: number = 1, refresh: boolean = false) => {
+    if (!id || isFetchingRef.current) return;
     
     try {
+      isFetchingRef.current = true;
       setNotesLoading(true);
-      const response = await getOpportunityNotes(id, { limit: 50 });
-      setNotes(response.data);
-    } catch (err) {
+      setNotesError(null);
+      
+      const queryParams = {
+        ...filters,
+        page,
+        size: 20
+      };
+      
+      const response = await getOpportunityNotes(id, queryParams);
+      
+      if (response && response.data) {
+        // Xử lý notes từ API
+        const newNotes = response.data || [];
+        
+        if (refresh) {
+          setNotes(newNotes);
+        } else {
+          setNotes(prev => [...prev, ...newNotes]);
+        }
+        
+        // Kiểm tra xem còn dữ liệu để load không
+        if (response.pageable) {
+          setNotesHasMore(page < response.pageable.totalPages);
+          setNotesPage(page);
+        } else {
+          setNotesHasMore(false);
+        }
+      }
+    } catch (err: any) {
+      setNotesError(err.message || 'Không thể tải ghi chú');
       console.error('Error fetching notes:', err);
     } finally {
       setNotesLoading(false);
+      isFetchingRef.current = false;
     }
-  }, [id]);
+  }, [id, filters]);
 
   // Fetch opportunity files
   const fetchOpportunityFiles = useCallback(async () => {
-    if (!id) return;
+    if (!id || isFetchingRef.current) return;
     
     try {
+      isFetchingRef.current = true;
       setFilesLoading(true);
       const response = await getOpportunityAttachments(id);
       setOpportunityFiles(response.data);
@@ -103,6 +177,7 @@ const OpportunityDetail = () => {
       console.error('Error fetching files:', err);
     } finally {
       setFilesLoading(false);
+      isFetchingRef.current = false;
     }
   }, [id]);
 
@@ -110,10 +185,13 @@ const OpportunityDetail = () => {
   const handleTabChange = (tab: 'info' | 'notes' | 'files') => {
     setActiveTab(tab);
     
-    // Load data for the selected tab if needed
+    // Load data cho tab notes nếu cần
     if (tab === 'notes' && notes.length === 0 && !notesLoading) {
-      fetchNotes();
-    } else if (tab === 'files' && opportunityFiles.length === 0 && !filesLoading) {
+      fetchOpportunityNotes(1, true);
+    }
+    
+    // Load data cho tab files nếu cần
+    if (tab === 'files' && opportunityFiles.length === 0 && !filesLoading) {
       fetchOpportunityFiles();
     }
   };
@@ -126,14 +204,34 @@ const OpportunityDetail = () => {
   // Toggle onsite priority
   const handleToggleOnsitePriority = async () => {
     if (!opportunity || !id) return;
-    
     try {
-      const updatedOpportunity = await updateOnsitePriority(id, {
-        onsitePriority: !opportunity.onsitePriority
+      const response = await updateOnsitePriority(id, {
+        priority: !opportunity.priority
       });
       
-      setOpportunity(updatedOpportunity);
+      // Xử lý nhiều định dạng API response khác nhau
+      if (response && typeof response === 'object') {
+        if ('status' in response && response.status === 'success' && 'data' in response) {
+          // API mới trả về response.data.opportunity
+          if (response.data && typeof response.data === 'object' && 'opportunity' in response.data) {
+            setOpportunity(response.data.opportunity);
+          } else {
+            setOpportunity((prev: any) => ({...prev, priority: !opportunity.priority}));
+          }
+        } else if ('opportunity' in response) {
+          // Định dạng cũ trả về response.opportunity
+          setOpportunity(response.opportunity);
+        } else {
+          // Trả về toàn bộ response nếu không khớp với các cấu trúc đã biết
+          setOpportunity((prev: any) => ({...prev, priority: !opportunity.priority}));
+        }
+      } else {
+        setOpportunity((prev: any) => ({...prev, priority: !opportunity.priority}));
+      }
+      
+      showToast('success', 'Thành công', 'Cập nhật ưu tiên onsite thành công!');
     } catch (err) {
+      showToast('error', 'Lỗi', 'Cập nhật ưu tiên onsite thất bại!');
       console.error('Error updating onsite priority:', err);
     }
   };
@@ -149,25 +247,23 @@ const OpportunityDetail = () => {
   };
 
   // Handle leader assignment
-  const handleAssignLeader = async (leaderId: string, message?: string) => {
+  const handleAssignLeader = async (leaderId: string, message?: string, notifyLeader?: boolean) => {
     if (!id) return;
-    
     try {
-      const updatedOpportunity = await assignLeaderToOpportunity(id, {
+      setShowAssignModal(false);
+      // Gọi API để phân công leader
+      await assignLeaderToOpportunity(id, {
         leaderId,
         message,
-        notifyLeader: true
+        notifyLeader
       });
       
-      setOpportunity(updatedOpportunity);
-      setShowAssignModal(false);
-      
-      // If we're in the notes tab, refresh notes to show the assignment
-      if (activeTab === 'notes') {
-        fetchNotes();
-      }
-    } catch (err) {
-      console.error('Error assigning leader:', err);
+      // Sau khi phân công thành công, tải lại thông tin cơ hội
+      fetchOpportunity();
+      showToast('success', 'Thành công', 'Phân công team thành công!');
+    } catch (error) {
+      console.error('Error assigning leader:', error);
+      showToast('error', 'Lỗi', 'Phân công team thất bại. Vui lòng thử lại!');
     }
   };
 
@@ -230,10 +326,27 @@ const OpportunityDetail = () => {
     }
   };
 
+  // Handle filter change
+  const handleFilterChange = (newFilters: FilterValues) => {
+    setFilters(newFilters);
+    // Khi thay đổi bộ lọc, load lại từ trang đầu tiên
+    fetchOpportunityNotes(1, true);
+  };
+
+  // Load more notes
+  const handleLoadMoreNotes = () => {
+    if (notesHasMore && !notesLoading) {
+      fetchOpportunityNotes(notesPage + 1);
+    }
+  };
+
   // Initial data loading
   useEffect(() => {
-    fetchOpportunity();
-  }, [fetchOpportunity]);
+    // Chỉ gọi khi id thay đổi và chưa fetch
+    if (id && !opportunity) {
+      fetchOpportunity();
+    }
+  }, [id, opportunity, fetchOpportunity]);
 
   if (loading) {
     return (
@@ -270,6 +383,78 @@ const OpportunityDetail = () => {
     }
   };
 
+  // Map deal stage to readable status
+  const getDealStageText = (status: string) => {
+    switch (status) {
+      case 'PROSPECTING':
+        return 'Tiếp cận khách hàng';
+      case 'QUALIFICATION':
+        return 'Xác định tiềm năng';
+      case 'NEEDS_ANALYSIS':
+        return 'Phân tích nhu cầu';
+      case 'VALUE_PROPOSITION':
+        return 'Đề xuất giá trị';
+      case 'PROPOSAL':
+        return 'Gửi đề xuất';
+      case 'NEGOTIATION':
+        return 'Đàm phán';
+      case 'DISCOVERY':
+        return 'Khám phá nhu cầu';
+      case 'CLOSED_WON':
+        return 'Đã chốt (Thành công)';
+      case 'CLOSED_LOST':
+        return 'Đã chốt (Thất bại)';
+      default:
+        return status;
+    }
+  }
+
+  // Map deal stage to badge color
+  const getDealStageBadgeClass = (status: string) => {
+    switch (status) {
+      case 'PROSPECTING':
+      case 'QUALIFICATION':
+      case 'DISCOVERY':
+        return 'bg-blue-100 text-blue-800';
+      case 'NEEDS_ANALYSIS':
+      case 'VALUE_PROPOSITION':
+        return 'bg-purple-100 text-purple-800';
+      case 'PROPOSAL':
+      case 'NEGOTIATION':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'CLOSED_WON':
+        return 'bg-green-100 text-green-800';
+      case 'CLOSED_LOST':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
+
+  // Lấy thông tin từ API mới
+  const opportunityName = opportunity.name || '';
+  const opportunityDescription = opportunity.description || '';
+  const opportunityCode = opportunity.code || '';
+  const estimatedValue = opportunity.amount || 0;
+  const currency = opportunity.currency || 'VND';
+  const dealStage = opportunity.status || 'new';
+  const createdAt = opportunity.createdAt || '';
+  const closingDate = opportunity.closingDate || '';
+  const createdBy = opportunity.createdBy || { id: '', name: 'Unknown User' };
+  const assignedTo = opportunity.assignedTo || null;
+  const priority = opportunity.priority || false;
+  const tags = opportunity.tags || [];
+  
+  // Xây dựng thông tin khách hàng từ các trường mới
+  const customerDetails = {
+    name: opportunity.customerName || '',
+    contact: opportunity.customerContact || '',
+    email: opportunity.customerEmail || '',
+    phone: opportunity.customerPhone || '',
+    address: '',
+    website: ''
+  };
+
   return (
     <div className="p-0">
       {/* Header with back button */}
@@ -279,7 +464,7 @@ const OpportunityDetail = () => {
         </button>
         <div>
           <h1 className="text-xl font-bold">Chi tiết cơ hội</h1>
-          <p className="text-sm text-gray-500">{opportunity.description}</p>
+          <p className="text-sm text-gray-500">{opportunityDescription}</p>
         </div>
       </div>
 
@@ -291,32 +476,55 @@ const OpportunityDetail = () => {
             <div>
               <p className="text-sm text-gray-500">Giá trị ước tính</p>
               <p className="text-2xl font-bold">
-                {formatCurrency(opportunity.estimatedValue, opportunity.currency)}
+                {formatCurrency(estimatedValue, currency)}
               </p>
             </div>
             
             <div>
               <p className="text-sm text-gray-500">Leader được assign</p>
               <div className="flex items-center mt-1">
-                {opportunity.assignedTo && opportunity.assignedTo.length > 0 ? (
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm mr-2">
-                      {opportunity.assignedTo[0].name.charAt(0)}
-                    </div>
-                    <p>{opportunity.assignedTo[0].name}</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center">
-                    <Button 
-                      onClick={handleOpenAssignModal} 
-                      variant="secondary"
-                      size="sm"
-                      disabled={!can('opportunity-assign:update:all')}
-                    >
-                      Assign Leader
-                    </Button>
-                  </div>
-                )}
+                {/* Get latest assigned employee from employeeAssignments */}
+                {(() => {
+                  const latestAssignedEmployee = getLatestAssignedEmployee(opportunity.employeeAssignments);
+                  
+                  if (latestAssignedEmployee) {
+                    return (
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm mr-2">
+                          {latestAssignedEmployee.employeeName.charAt(0)}
+                        </div>
+                        <div>
+                          <p>{latestAssignedEmployee.employeeName}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(latestAssignedEmployee.assignedAt).toLocaleDateString('vi-VN')}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  } else if (assignedTo) {
+                    return (
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm mr-2">
+                          {assignedTo.name.charAt(0)}
+                        </div>
+                        <p>{assignedTo.name}</p>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="flex items-center">
+                        <Button 
+                          onClick={handleOpenAssignModal} 
+                          variant="secondary"
+                          size="sm"
+                          disabled={!can('opportunity-assign:update:all')}
+                        >
+                          Assign Leader
+                        </Button>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             </div>
             
@@ -327,13 +535,13 @@ const OpportunityDetail = () => {
                   <input
                     type="checkbox"
                     id="onsitePriority"
-                    checked={opportunity.onsitePriority}
+                    checked={priority}
                     onChange={handleToggleOnsitePriority}
                     className="w-4 h-4"
                     disabled={!can('opportunity-onsite:update:all') && !can('opportunity-onsite:update:assigned')}
                   />
                   <label htmlFor="onsitePriority" className="ml-2 text-sm font-medium cursor-pointer">
-                    {opportunity.onsitePriority ? 'Có' : 'Không'}
+                    {priority ? 'Có' : 'Không'}
                   </label>
                 </div>
               </div>
@@ -345,20 +553,54 @@ const OpportunityDetail = () => {
             <div>
               <p className="text-sm text-gray-500">Giai đoạn bán hàng</p>
               <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">Mới khởi tạo</span>
+                <span className={`px-2 py-0.5 ${getDealStageBadgeClass(dealStage)} rounded-full text-xs`}>
+                  {getDealStageText(dealStage)}
+                </span>
               </div>
             </div>
             
             <div>
-              <p className="text-sm text-gray-500">Tương tác cuối</p>
+              <p className="text-sm text-gray-500">Mã cơ hội</p>
               <p className="text-gray-700 mt-1">
-                {formatDate(opportunity.lastInteractionDate || opportunity.createdAt)}
+                {opportunityCode}
               </p>
             </div>
             
             <div>
               <p className="text-sm text-gray-500">Ngày tạo</p>
-              <p className="text-gray-700 mt-1">{formatDate(opportunity.createdAt)}</p>
+              <p className="text-gray-700 mt-1">{formatDate(createdAt)}</p>
+            </div>
+          </div>
+          
+          {/* Deal Size & Source Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div>
+              <p className="text-sm text-gray-500">Quy mô dự án</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`px-2 py-0.5 ${
+                  opportunity.dealSize === 'LARGE' ? 'bg-purple-100 text-purple-800' :
+                  opportunity.dealSize === 'MEDIUM' ? 'bg-blue-100 text-blue-800' :
+                  opportunity.dealSize === 'SMALL' ? 'bg-green-100 text-green-800' :
+                  opportunity.dealSize === 'ENTERPRISE' ? 'bg-orange-100 text-orange-800' :
+                  'bg-gray-100 text-gray-800'
+                } rounded-full text-xs`}>
+                  {opportunity.dealSize || 'Chưa xác định'}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <p className="text-sm text-gray-500">Nguồn</p>
+              <p className="text-gray-700 mt-1">
+                {opportunity.source || 'Chưa xác định'}
+              </p>
+            </div>
+            
+            <div>
+              <p className="text-sm text-gray-500">Mã tham chiếu</p>
+              <p className="text-gray-700 mt-1">
+                {opportunity.externalId || 'N/A'}
+              </p>
             </div>
           </div>
           
@@ -368,28 +610,29 @@ const OpportunityDetail = () => {
               <p className="text-sm text-gray-500">Người phụ trách Sales</p>
               <div className="flex items-center mt-1">
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm mr-2">
-                  {opportunity.createdBy.name.charAt(0)}
+                  {createdBy.name.charAt(0)}
                 </div>
-                <p>{opportunity.createdBy.name}</p>
+                <p>{createdBy.name}</p>
               </div>
             </div>
             
             <div>
-              <p className="text-sm text-gray-500">Trạng thái Follow-up</p>
+              <p className="text-sm text-gray-500">Khách hàng</p>
               <div className="mt-1">
-                <Badge variant={getFollowUpStatusColor(opportunity.followupStatus)}>
-                  {opportunity.followupStatus === 'Green' ? 'Tốt' :
-                   opportunity.followupStatus === 'Yellow' ? 'Cần tương tác' :
-                   opportunity.followupStatus === 'Red' ? 'Quá hạn' : opportunity.followupStatus}
-                </Badge>
+                <p className="font-medium">{customerDetails.name || 'N/A'}</p>
+                {customerDetails.contact && (
+                  <p className="text-sm text-gray-600">
+                    Liên hệ: {customerDetails.contact}
+                  </p>
+                )}
               </div>
             </div>
             
             <div>
               <p className="text-sm text-gray-500">Ngày đóng dự kiến</p>
               <p className="text-gray-700 mt-1">
-                {opportunity.expectedCloseDate 
-                  ? formatDate(opportunity.expectedCloseDate) 
+                {closingDate 
+                  ? formatDate(closingDate) 
                   : 'N/A'}
               </p>
             </div>
@@ -479,29 +722,45 @@ const OpportunityDetail = () => {
                 <div>
                   <h3 className="text-lg font-medium mb-3">Mô tả</h3>
                   <p className="whitespace-pre-wrap text-gray-700">
-                    {opportunity.description || 'Không có mô tả chi tiết.'}
+                    {opportunityDescription || 'Không có mô tả chi tiết.'}
                   </p>
                 </div>
                 
                 <div>
                   <h3 className="text-lg font-medium mb-3">Yêu cầu dự án</h3>
-                  <ul className="list-disc pl-5 space-y-2">
-                    <li>Phát triển trên nền tảng web-based</li>
-                    <li>Tương thích với multiple devices</li>
-                    <li>Tích hợp với hệ thống third-party</li>
-                    <li>Thời gian triển khai dự kiến: 6 tháng</li>
-                    <li>Yêu cầu bảo mật cao</li>
-                  </ul>
+                  {tags && tags.length > 0 ? (
+                    <ul className="list-disc pl-5 space-y-2">
+                      {tags.map((tag: string, index: number) => (
+                        <li key={index}>{tag}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <ul className="list-disc pl-5 space-y-2">
+                      <li>Phát triển trên nền tảng web-based</li>
+                      <li>Tương thích với multiple devices</li>
+                      <li>Tích hợp với hệ thống third-party</li>
+                      <li>Thời gian triển khai dự kiến: 6 tháng</li>
+                      <li>Yêu cầu bảo mật cao</li>
+                    </ul>
+                  )}
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-medium mb-3">Ghi chú kỹ thuật</h3>
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <p className="font-medium mb-1">Tech Stack: .NET Core, React, SQL Server</p>
-                    <p className="font-medium mb-1">Infrastructure: Azure Cloud</p>
-                    <p className="font-medium mb-1">Integration Points: REST APIs, Message Queue</p>
-                    <p className="font-medium">Security Requirements: SSO, 2FA, Role-based Access Control</p>
-                  </div>
+                  <h3 className="text-lg font-medium mb-3">Thông tin khách hàng</h3>
+                  {customerDetails ? (
+                    <div className="bg-gray-50 p-4 rounded-md">
+                      <p className="font-medium mb-1">Tên: {customerDetails.name || 'N/A'}</p>
+                      <p className="font-medium mb-1">Liên hệ: {customerDetails.contact || 'N/A'}</p>
+                      <p className="font-medium mb-1">Email: {customerDetails.email || 'N/A'}</p>
+                      <p className="font-medium mb-1">SĐT: {customerDetails.phone || 'N/A'}</p>
+                      <p className="font-medium mb-1">Địa chỉ: {customerDetails.address || 'N/A'}</p>
+                      <p className="font-medium">Website: {customerDetails.website || 'N/A'}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 p-4 rounded-md">
+                      <p className="font-medium mb-1">Không có thông tin khách hàng</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -514,23 +773,26 @@ const OpportunityDetail = () => {
                   <NoteInputForm
                     opportunityId={id || ''}
                     onSuccess={() => {
-                      fetchNotes();
-                      fetchOpportunity(); // Refresh opportunity to update lastInteractionDate
+                      // Reload notes when a new note is added
+                      fetchOpportunityNotes(1, true);
                     }}
                   />
                 )}
                 
                 {/* Advanced filtering */}
                 <AdvancedFiltering 
-                  onFilterChange={(filterValues: FilterValues) => {
-                    setFilters(filterValues);
-                  }}
+                  onFilterChange={handleFilterChange}
                 />
                 
                 {/* Activity timeline */}
                 <ActivityTimeline
                   opportunityId={id || ''}
                   filter={filters}
+                  notes={notes}
+                  isLoading={notesLoading}
+                  error={notesError}
+                  hasMore={notesHasMore}
+                  onLoadMore={handleLoadMoreNotes}
                 />
               </div>
             )}

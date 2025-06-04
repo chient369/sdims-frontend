@@ -2,14 +2,14 @@
  * OpportunityList component for displaying and managing business opportunities.
  * Implements the MH-OPP-01 screen.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
 import { format, formatDistance, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 import { useOpportunities } from '../../../hooks/useOpportunities';
-import { syncOpportunities } from '../api';
+import { syncOpportunities, assignLeaderToOpportunity } from '../api';
 import { OpportunityResponse, OpportunityListParams } from '../types';
 
 import { Button } from '../../../components/ui/Button';
@@ -20,6 +20,9 @@ import { Table } from '../../../components/table/Table';
 import { Alert } from '../../../components/ui/Alert';
 import MainLayout from '../../../components/layout/MainLayout';
 import PermissionGuard from '../../../components/ui/PermissionGuard';
+import { usePermissions } from '../../../hooks/usePermissions';
+import { useNotifications } from '../../../context/NotificationContext';
+import { AssignLeaderModal } from './index';
 
 // Constants for follow-up status colors
 const FOLLOWUP_STATUS_COLORS = {
@@ -41,6 +44,7 @@ const OpportunityList: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const { showToast } = useNotifications();
   
   // Filter states
   const [filters, setFilters] = useState<OpportunityListParams>({
@@ -57,6 +61,19 @@ const OpportunityList: React.FC = () => {
     error: fetchError,
     refetch 
   } = useOpportunities(filters);
+  
+  // Add console log to debug the data
+  useEffect(() => {
+    console.log('Opportunities data:', opportunitiesData);
+    // Kiểm tra chi tiết cấu trúc dữ liệu
+    if (opportunitiesData) {
+      console.log('Data structure:', {
+        hasData: !!opportunitiesData.data,
+        dataLength: opportunitiesData.data?.length,
+        metaInfo: opportunitiesData.meta
+      });
+    }
+  }, [opportunitiesData]);
   
   // Effect to restore filter state from localStorage
   useEffect(() => {
@@ -142,58 +159,74 @@ const OpportunityList: React.FC = () => {
   const columnHelper = createColumnHelper<OpportunityResponse>();
   
   const columns = [
-    columnHelper.accessor(row => ({ name: row.name, client: row.client, hubspotId: row.hubspotId }), {
+    columnHelper.accessor(row => ({ id: row.id, name: row.name, customerName: row.customerName, externalId: row.externalId }), {
       id: 'opportunityInfo',
-      header: 'Tên cơ hội',
+      header: 'TÊN CƠ HỘI',
       cell: ({ getValue }) => {
         const value = getValue();
         return (
           <div className="flex flex-col">
-            <a href={`/opportunities/${value.hubspotId}`} className="text-blue-600 hover:underline font-medium">{value.name}</a>
+            <a href={`/opportunities/${value.id}`} className="text-blue-600 hover:underline font-medium">{value.name}</a>
+            <span className="text-xs text-gray-500">{value.externalId || ''}</span>
           </div>
         );
       }
     }),
     
-    columnHelper.accessor(row => row.client.name, {
-      id: 'clientName',
-      header: 'Khách hàng',
+    columnHelper.accessor('customerName', {
+      id: 'customerName',
+      header: 'KHÁCH HÀNG',
       cell: info => <div className="text-gray-800">{info.getValue()}</div>
     }),
     
-    columnHelper.accessor(row => ({ value: row.estimatedValue, currency: row.currency }), {
+    columnHelper.accessor(row => ({ value: row.amount, currency: row.currency }), {
       id: 'estimatedValue',
-      header: 'Giá trị ước tính',
+      header: 'GIÁ TRỊ ƯỚC TÍNH',
       cell: ({ getValue }) => {
         const { value, currency } = getValue();
         // Format currency value
         return (
           <div className="font-medium">
-            {value.toLocaleString('vi-VN')} {currency}
+            {value?.toLocaleString('vi-VN')} {currency}
           </div>
         );
       }
     }),
     
-    columnHelper.accessor('dealStage', {
-      header: 'Giai đoạn',
+    columnHelper.accessor('status', {
+      header: 'GIAI ĐOẠN',
       cell: ({ getValue }) => {
         const value = getValue();
-        // Map dealStage to appropriate badge color
+        // Map status to appropriate badge color
         let badgeClass = '';
         
         switch(value) {
-          case 'Qualification':
+          case 'PROSPECTING':
             badgeClass = 'bg-blue-100 text-blue-800';
             break;
-          case 'Demo':
+          case 'QUALIFICATION':
+            badgeClass = 'bg-blue-100 text-blue-800';
+            break;
+          case 'NEEDS_ANALYSIS':
             badgeClass = 'bg-purple-100 text-purple-800';
             break;
-          case 'Negotiation':
+          case 'VALUE_PROPOSITION':
+            badgeClass = 'bg-purple-100 text-purple-800';
+            break;
+          case 'PROPOSAL':
             badgeClass = 'bg-yellow-100 text-yellow-800';
             break;
-          case 'Closed':
+          case 'NEGOTIATION':
+            badgeClass = 'bg-yellow-100 text-yellow-800';
+            break;
+          case 'DISCOVERY':
+            badgeClass = 'bg-blue-100 text-blue-800';
+            break;
+          case 'CLOSED_WON':
             badgeClass = 'bg-green-100 text-green-800';
+            break;
+          case 'CLOSED_LOST':
+            badgeClass = 'bg-red-100 text-red-800';
             break;
           default:
             badgeClass = 'bg-gray-100 text-gray-800';
@@ -204,11 +237,11 @@ const OpportunityList: React.FC = () => {
     }),
     
     columnHelper.accessor('assignedTo', {
-      header: 'Người phụ trách',
+      header: 'NGƯỜI PHỤ TRÁCH',
       cell: ({ getValue }) => {
-        const leaders = getValue();
+        const assignedTo = getValue();
         
-        if (!leaders || leaders.length === 0) {
+        if (!assignedTo) {
           return (
             <div className="flex items-center">
               <span className="text-gray-400">–</span>
@@ -219,52 +252,53 @@ const OpportunityList: React.FC = () => {
         return (
           <div className="flex items-center">
             <div className="flex -space-x-2 mr-2">
-              {leaders.map((leader, idx) => (
-                <div key={leader.id} className="w-7 h-7 bg-gray-200 rounded-full border-2 border-white flex items-center justify-center text-xs overflow-hidden">
-                  {leader.name.charAt(0)}
-                </div>
-              ))}
+              <div className="w-7 h-7 bg-gray-200 rounded-full border-2 border-white flex items-center justify-center text-xs overflow-hidden">
+                {assignedTo.name?.charAt(0) || ''}
+              </div>
             </div>
-            <span className="text-sm">{leaders[0].name}</span>
+            <span className="text-sm">{assignedTo.name || ''}</span>
           </div>
         );
       }
     }),
     
-    columnHelper.accessor('followupStatus', {
-      header: 'Trạng thái',
+    columnHelper.accessor('lastInteractionDate', {
+      header: 'TƯƠNG TÁC CUỐI',
       cell: ({ getValue }) => {
-        const status = getValue();
+        const lastInteractionDate = getValue();
         
-        const statusMap = {
-          'Green': { dot: 'bg-green-500', text: '' },
-          'Red': { dot: 'bg-red-500', text: '' },
-          'Yellow': { dot: 'bg-yellow-500', text: '' }
-        };
+        if (!lastInteractionDate) {
+          return <span className="text-gray-400">–</span>;
+        }
         
-        const { dot } = statusMap[status] || { dot: 'bg-gray-500', text: '' };
-        
-        return (
-          <div className="flex items-center justify-center">
-            <span className={`inline-block w-3 h-3 rounded-full ${dot}`}></span>
-          </div>
-        );
+        try {
+          const date = parseISO(lastInteractionDate);
+          const relativeTime = formatDistance(date, new Date(), { 
+            addSuffix: true,
+            locale: vi
+          });
+          
+          return <span className="text-gray-600">{relativeTime}</span>;
+        } catch (e) {
+          console.error('Date parse error:', e);
+          return <span className="text-gray-400">–</span>;
+        }
       }
     }),
     
-    columnHelper.accessor('onsitePriority', {
-      header: 'Onsite',
+    columnHelper.accessor('priority', {
+      header: 'ONSITE',
       cell: ({ getValue }) => {
-        const isOnsite = getValue();
+        const isPriority = getValue();
         
         return (
           <div className="flex items-center justify-center">
-            {isOnsite && (
+            {isPriority && (
               <svg className="w-5 h-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             )}
-            {!isOnsite && (
+            {!isPriority && (
               <span className="inline-block w-5 h-5 text-center">–</span>
             )}
           </div>
@@ -274,7 +308,7 @@ const OpportunityList: React.FC = () => {
     
     columnHelper.display({
       id: 'actions',
-      header: 'Hành động',
+      header: 'HÀNH ĐỘNG',
       cell: ({ row }) => {
         return (
           <div className="flex items-center space-x-2">
@@ -299,9 +333,8 @@ const OpportunityList: React.FC = () => {
                 className="p-1 text-green-500 hover:text-green-700 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Implement Assign Leader logic here, for example:
-                  openAssignLeaderModal(row.original.id);
-                  // alert(`Assign Leader for opportunity: ${row.original.name}`);
+                  // Implement Assign Leader logic here
+                  openAssignLeaderModal(row.original.id.toString());
                 }}
                 title="Phân công Leader"
               >
@@ -335,7 +368,7 @@ const OpportunityList: React.FC = () => {
                   // Toggle onsite priority
                   alert(`Toggle onsite priority for: ${row.original.name}`);
                 }}
-                title={row.original.onsitePriority ? "Bỏ ưu tiên Onsite" : "Đánh dấu ưu tiên Onsite"}
+                title={row.original.priority ? "Bỏ ưu tiên Onsite" : "Đánh dấu ưu tiên Onsite"}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
@@ -373,21 +406,40 @@ const OpportunityList: React.FC = () => {
     
     try {
       // Thực hiện gọi API để assign leader
-      // await assignLeaderToOpportunity(selectedOpportunityId, selectedLeaderId, assignNote);
+      await assignLeaderToOpportunity(selectedOpportunityId, {
+        leaderId: selectedLeaderId,
+        message: assignNote,
+        notifyLeader: true
+      });
       
-      // Mock implementation
-      console.log(`Assigned leader ${selectedLeaderId} to opportunity ${selectedOpportunityId}`);
-      console.log(`Note: ${assignNote}`);
+      // Hiển thị thông báo Toast khi phân công thành công
+      const opportunityName = opportunitiesData?.data.find(
+        opp => opp.id.toString() === selectedOpportunityId
+      )?.name || "Cơ hội";
+      
+      showToast(
+        'success',
+        'Phân công thành công',
+        `Đã phân công team cho cơ hội: ${opportunityName}`
+      );
       
       // Đóng modal và refetch dữ liệu
       closeAssignLeaderModal();
       refetch();
     } catch (error) {
       console.error('Error assigning leader:', error);
+      
+      // Hiển thị thông báo Toast khi phân công thất bại
+      showToast(
+        'error',
+        'Phân công thất bại',
+        'Có lỗi xảy ra khi phân công Team. Vui lòng thử lại sau.'
+      );
     }
   };
   
-  return (
+  // Return main content
+  const content = (
     <div className="container mx-auto px-4 py-4">
       <Card className="mb-6">
         <div className="p-4">
@@ -410,11 +462,11 @@ const OpportunityList: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Người phụ trách Sales
+                Khách hàng
               </label>
               <select
-                value={filters.clientId || ''}
-                onChange={(e) => handleFilterChange('clientId', e.target.value)}
+                value={filters.customerName || ''}
+                onChange={(e) => handleFilterChange('customerName', e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="">Tất cả</option>
@@ -424,7 +476,7 @@ const OpportunityList: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Leader được assign
+                Người phụ trách
               </label>
               <select
                 value={filters.assignedToId || ''}
@@ -439,71 +491,23 @@ const OpportunityList: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Giai đoạn bán hàng
+                Trạng thái
               </label>
               <select
-                value={filters.dealStage || ''}
-                onChange={(e) => handleFilterChange('dealStage', e.target.value)}
+                value={filters.status || ''}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="">Tất cả</option>
-                <option value="Qualification">Qualification</option>
-                <option value="Demo">Demo</option>
-                <option value="Negotiation">Negotiation</option>
-                <option value="Closed">Closed</option>
+                <option value="PROSPECTING">PROSPECTING</option>
+                <option value="QUALIFICATION">QUALIFICATION</option>
+                <option value="NEEDS_ANALYSIS">NEEDS_ANALYSIS</option>
+                <option value="VALUE_PROPOSITION">VALUE_PROPOSITION</option>
+                <option value="PROPOSAL">PROPOSAL</option>
+                <option value="NEGOTIATION">NEGOTIATION</option>
+                <option value="CLOSED_WON">CLOSED_WON</option>
+                <option value="CLOSED_LOST">CLOSED_LOST</option>
               </select>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Trạng thái Follow-up
-              </label>
-              <select
-                value={filters.followupStatus || ''}
-                onChange={(e) => handleFilterChange('followupStatus', e.target.value as any)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Tất cả</option>
-                <option value="Red">Cần liên hệ gấp</option>
-                <option value="Yellow">Sắp cần follow-up</option>
-                <option value="Green">Đã follow-up</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ưu tiên Onsite
-              </label>
-              <select
-                value={filters.onsitePriority ? 'true' : ''}
-                onChange={(e) => handleFilterChange('onsitePriority', e.target.value === 'true')}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Tất cả</option>
-                <option value="true">Ưu tiên onsite</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Khoảng thời gian
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="date"
-                  value={filters.createdDateFrom || ''}
-                  onChange={(e) => handleFilterChange('createdDateFrom', e.target.value)}
-                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                />
-                <input
-                  type="date"
-                  value={filters.createdDateTo || ''}
-                  onChange={(e) => handleFilterChange('createdDateTo', e.target.value)}
-                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
             </div>
           </div>
           
@@ -558,25 +562,6 @@ const OpportunityList: React.FC = () => {
                 </svg>
                 Export
               </Button>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  className="flex items-center p-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5zm12 1a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5z" clipRule="evenodd" />
-                  </svg>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex items-center p-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                </Button>
-              </div>
             </div>
           </div>
         </div>
@@ -631,6 +616,7 @@ const OpportunityList: React.FC = () => {
             className="m-4"
           >
             Có lỗi xảy ra khi tải dữ liệu cơ hội. Vui lòng thử lại sau.
+            <p className="mt-2 text-red-600">Chi tiết lỗi: {fetchError.toString()}</p>
           </Alert>
         ) : (
           <Table
@@ -644,10 +630,41 @@ const OpportunityList: React.FC = () => {
         )}
         
         {/* Show message when no data */}
-        {!isLoading && opportunitiesData?.data.length === 0 && (
-          <div className="py-8 text-center text-gray-500">
-            <p>Không tìm thấy cơ hội kinh doanh phù hợp.</p>
-            <p className="mt-2">Vui lòng thử thay đổi bộ lọc hoặc đồng bộ dữ liệu từ Hubspot.</p>
+        {!isLoading && (!opportunitiesData || opportunitiesData.data.length === 0) && (
+          <div className="py-12 text-center">
+            <div className="mx-auto mb-4">
+              <svg className="w-16 h-16 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy cơ hội kinh doanh</h3>
+            <p className="text-gray-500 max-w-md mx-auto mb-6">
+              Hiện tại chưa có dữ liệu cơ hội nào. Bạn có thể thử đồng bộ dữ liệu từ Hubspot hoặc thay đổi bộ lọc.
+            </p>
+            <div className="flex justify-center gap-4">
+              <Button
+                variant="default"
+                onClick={handleSync}
+                isLoading={isSyncing}
+                disabled={isSyncing}
+                className="flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+                </svg>
+                Đồng bộ từ Hubspot
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleResetFilters}
+                className="flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Xóa bộ lọc
+              </Button>
+            </div>
           </div>
         )}
       </Card>
@@ -662,54 +679,55 @@ const OpportunityList: React.FC = () => {
       )}
 
       {/* Assign Leader Modal */}
-      {isAssignModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold mb-4">Phân công Leader</h3>
+      {isAssignModalOpen && selectedOpportunityId && (
+        <AssignLeaderModal
+          opportunityId={selectedOpportunityId}
+          opportunityName={
+            opportunitiesData?.data.find(opp => opp.id.toString() === selectedOpportunityId)?.name || 
+            "Cơ hội"
+          }
+          onClose={closeAssignLeaderModal}
+          onAssign={async (leaderId, message, notifyLeader) => {
+            if (!selectedOpportunityId) return;
             
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Chọn Leader
-              </label>
-              <select
-                value={selectedLeaderId}
-                onChange={(e) => setSelectedLeaderId(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">-- Chọn Leader --</option>
-                {/* Options would be loaded from API */}
-                <option value="leader1">Nguyễn Văn A</option>
-                <option value="leader2">Trần Thị B</option>
-                <option value="leader3">Lê Văn C</option>
-              </select>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ghi chú (tùy chọn)
-              </label>
-              <textarea
-                value={assignNote}
-                onChange={(e) => setAssignNote(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                rows={3}
-                placeholder="Thêm ghi chú về việc phân công này..."
-              ></textarea>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={closeAssignLeaderModal}>
-                Hủy
-              </Button>
-              <Button variant="default" onClick={handleAssignLeader} disabled={!selectedLeaderId}>
-                Xác nhận
-              </Button>
-            </div>
-          </div>
-        </div>
+            try {
+              await assignLeaderToOpportunity(selectedOpportunityId, {
+                leaderId,
+                message,
+                notifyLeader
+              });
+              
+              // Hiển thị thông báo Toast khi phân công thành công
+              const opportunityName = opportunitiesData?.data.find(
+                opp => opp.id.toString() === selectedOpportunityId
+              )?.name || "Cơ hội";
+              
+              showToast(
+                'success',
+                'Phân công thành công',
+                `Đã phân công team cho cơ hội: ${opportunityName}`
+              );
+              
+              // Đóng modal và refetch dữ liệu
+              closeAssignLeaderModal();
+              refetch();
+            } catch (error) {
+              console.error('Error assigning leader:', error);
+              
+              // Hiển thị thông báo Toast khi phân công thất bại
+              showToast(
+                'error',
+                'Phân công thất bại',
+                'Có lỗi xảy ra khi phân công Team. Vui lòng thử lại sau.'
+              );
+            }
+          }}
+        />
       )}
     </div>
   );
+  
+  return content;
 };
 
 export default OpportunityList; 

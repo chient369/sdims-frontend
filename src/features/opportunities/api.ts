@@ -10,7 +10,8 @@ import {
   OpportunityNoteCreateData,
   SyncLogResponse,
   OpportunityAttachment,
-  OpportunityAttachmentListParams
+  OpportunityAttachmentListParams,
+  OpportunityListResponse
 } from './types';
 
 /**
@@ -25,10 +26,34 @@ export const getOpportunities = async (params?: OpportunityListParams, config?: 
     totalPages: number;
   };
 }> => {
-  return apiClient.get('/api/v1/opportunities', { 
+  const response = await apiClient.get<OpportunityListResponse>('/api/v1/opportunities', { 
     ...config,
     params,
   });
+  
+  // Kiểm tra cấu trúc API mới
+  if (response.data && response.data.content) {
+    return {
+      data: response.data.content,
+      meta: {
+        total: response.data.summary.totalCount || 0,
+        page: response.data.pageable.pageNumber || 1,
+        limit: response.data.pageable.pageSize || 10,
+        totalPages: response.data.pageable.totalPages || 1
+      }
+    };
+  }
+  
+  // Trả về response gốc nếu không cần chuyển đổi
+  return {
+    data: [],
+    meta: {
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0
+    }
+  };
 };
 
 /**
@@ -106,7 +131,7 @@ export const assignLeaderToOpportunity = async (
   },
   config?: AxiosRequestConfig
 ): Promise<OpportunityResponse> => {
-  return apiClient.post(`/api/v1/opportunities/${opportunityId}/leaders`, data, config);
+  return apiClient.post(`/api/v1/opportunities/${opportunityId}/assign`, data, config);
 };
 
 /**
@@ -136,6 +161,11 @@ export const addOpportunityNote = async (
     // Add new fields to formData if they exist
     if (data.type) {
       formData.append('type', data.type);
+    }
+    
+    // Thêm activityType nếu có
+    if (data.activityType) {
+      formData.append('activityType', data.activityType);
     }
     
     if (data.tags && data.tags.length > 0) {
@@ -171,6 +201,7 @@ export const addOpportunityNote = async (
     {
       content: data.content,
       type: data.type,
+      activityType: data.activityType,
       tags: data.tags,
       isInteraction: data.isInteraction
     },
@@ -185,36 +216,93 @@ export const getOpportunityNotes = async (
   opportunityId: string,
   params?: {
     page?: number;
-    limit?: number;
+    size?: number;
+    activityType?: string | string[];
+    fromDate?: string;
+    toDate?: string;
+    createdBy?: string | string[];
+    includeAttachments?: boolean;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
   },
   config?: AxiosRequestConfig
 ): Promise<{
   data: OpportunityNoteResponse[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
+  pageable?: {
+    totalElements: number;
+    pageNumber: number;
+    pageSize: number;
     totalPages: number;
   };
 }> => {
-  return apiClient.get(`/api/v1/opportunities/${opportunityId}/notes`, {
+  // Xử lý params đặc biệt
+  let queryParams = { ...params };
+  
+  // Xử lý mảng để gửi đúng định dạng API
+  if (Array.isArray(queryParams.activityType)) {
+    queryParams.activityType = queryParams.activityType.join(',');
+  }
+  
+  if (Array.isArray(queryParams.createdBy)) {
+    queryParams.createdBy = queryParams.createdBy.join(',');
+  }
+  
+  const response = await apiClient.get(`/api/v1/opportunities/${opportunityId}/notes`, {
     ...config,
-    params
+    params: queryParams
   });
+
+  // Nếu API trả về định dạng mới với data array
+  if (response.data && Array.isArray(response.data)) {
+    return {
+      data: response.data.map((note: any) => ({
+        ...note,
+        // Tạo trường createdBy từ authorId và authorName nếu có
+        createdBy: note.authorId ? {
+          id: note.authorId,
+          name: note.authorName || 'Unknown'
+        } : undefined,
+        // Đảm bảo tags là mảng
+        tags: note.tags || []
+      })),
+      pageable: {
+        totalElements: response.data.pageable?.totalElements || 0,
+        pageNumber: response.data.pageable?.pageNumber || 1,
+        pageSize: response.data.pageable?.pageSize || 10,
+        totalPages: response.data.pageable?.totalPages || 1
+      }
+    };
+  }
+  
+  // Nếu API trả về định dạng cũ với cấu trúc data.content
+  if (response.data && response.data.data && response.data.data.content) {
+    return {
+      data: response.data.data.content,
+      pageable: {
+        totalElements: response.data.data.pageable?.totalElements || 0,
+        pageNumber: response.data.data.pageable?.pageNumber || 1,
+        pageSize: response.data.data.pageable?.pageSize || 10,
+        totalPages: response.data.data.pageable?.totalPages || 1
+      }
+    };
+  }
+  
+  // Fallback: trả về dữ liệu gốc nếu không khớp với các cấu trúc đã biết
+  return response.data;
 };
 
 /**
- * Update opportunity onsite priority
+ * Update onsite priority for an opportunity (set ưu tiên onsite)
  */
 export const updateOnsitePriority = async (
   opportunityId: string,
   data: {
-    onsitePriority: boolean;
-    reason?: string;
+    priority: boolean;
   },
-  config?: AxiosRequestConfig
-): Promise<OpportunityResponse> => {
-  return apiClient.put(`/api/v1/opportunities/${opportunityId}/onsite-priority`, data, config);
+  config?: any
+): Promise<any> => {
+  // Sử dụng apiClient chuẩn, endpoint PUT /api/v1/opportunities/{oppId}/onsite
+  return apiClient.put(`/api/v1/opportunities/${opportunityId}/onsite`, data, config);
 };
 
 /**
@@ -278,4 +366,22 @@ export const deleteOpportunityFile = async (
     `/api/v1/opportunities/${opportunityId}/files/${fileId}`,
     config
   );
+};
+
+/**
+ * Get available teams for assigning to opportunities
+ */
+export const getTeams = async (
+  params?: {
+    page?: number;
+    size?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+  },
+  config?: AxiosRequestConfig
+): Promise<any> => {
+  return apiClient.get('/api/v1/teams', {
+    ...config,
+    params
+  });
 }; 

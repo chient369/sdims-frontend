@@ -3,7 +3,7 @@ import { formatDistanceToNow, format, isToday, isYesterday, isSameDay, parseISO 
 import { vi } from 'date-fns/locale';
 import { getOpportunityNotes } from '../../api';
 import { OpportunityNoteResponse } from '../../types';
-import { Spinner, Alert } from '../../../../components/ui';
+import { Spinner, Alert, Button } from '../../../../components/ui';
 
 interface ActivityTimelineProps {
   opportunityId: string;
@@ -15,6 +15,11 @@ interface ActivityTimelineProps {
     searchText?: string;
   };
   limit?: number;
+  notes?: OpportunityNoteResponse[];
+  isLoading?: boolean;
+  error?: string | null;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /**
@@ -23,96 +28,25 @@ interface ActivityTimelineProps {
  * @param {string} opportunityId - ID of the opportunity to get activities for
  * @param {Object} filter - Optional filters to apply
  * @param {number} limit - Number of activities to fetch per page
+ * @param {OpportunityNoteResponse[]} notes - Notes to display (if provided directly)
+ * @param {boolean} isLoading - Whether notes are being loaded
+ * @param {string|null} error - Error message if any
+ * @param {boolean} hasMore - Whether there are more notes to load
+ * @param {Function} onLoadMore - Callback to load more notes
  * @returns {JSX.Element} The rendered component
  */
 const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   opportunityId,
   filter,
-  limit = 10
+  limit = 10,
+  notes = [],
+  isLoading = false,
+  error = null,
+  hasMore = false,
+  onLoadMore
 }) => {
   // State
-  const [activities, setActivities] = useState<OpportunityNoteResponse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-  const [loadingMore, setLoadingMore] = useState(false);
-  
-  // Fetch activities
-  const fetchActivities = useCallback(
-    async (page: number, replace: boolean = false) => {
-      try {
-        setLoading(page === 1);
-        setLoadingMore(page > 1);
-        setError(null);
-        
-        const params: any = {
-          page,
-          limit,
-        };
-        
-        // Add filters if provided
-        if (filter) {
-          if (filter.activityTypes?.length) {
-            params.types = filter.activityTypes.join(',');
-          }
-          
-          if (filter.dateRange?.from) {
-            params.createdFrom = filter.dateRange.from.toISOString();
-          }
-          
-          if (filter.dateRange?.to) {
-            params.createdTo = filter.dateRange.to.toISOString();
-          }
-          
-          if (filter.createdBy?.length) {
-            params.createdBy = filter.createdBy.join(',');
-          }
-          
-          if (filter.tags?.length) {
-            params.tags = filter.tags.join(',');
-          }
-          
-          if (filter.searchText) {
-            params.keyword = filter.searchText;
-          }
-        }
-        
-        const response = await getOpportunityNotes(opportunityId, params);
-        
-        if (replace) {
-          setActivities(response.data);
-        } else {
-          setActivities(prev => [...prev, ...response.data]);
-        }
-        
-        setTotalPages(response.meta.totalPages);
-      } catch (err: any) {
-        setError(err.message || 'Không thể tải lịch sử hoạt động');
-        console.error('Error fetching activities:', err);
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [opportunityId, filter, limit]
-  );
-  
-  // Initial load
-  useEffect(() => {
-    setPage(1);
-    fetchActivities(1, true);
-  }, [fetchActivities]);
-  
-  // Load more
-  const handleLoadMore = () => {
-    if (page < totalPages && !loadingMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchActivities(nextPage);
-    }
-  };
   
   // Toggle expand/collapse of an activity
   const toggleExpand = (id: string) => {
@@ -129,12 +63,18 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
    * @returns {React.ReactNode} The icon component with appropriate styling
    */
   const getActivityIcon = (activity: OpportunityNoteResponse) => {
-    // Xác định loại hoạt động từ activity.type (nếu có) hoặc dùng giá trị mặc định
-    // Giả sử activity có thêm trường type (cần bổ sung vào OpportunityNoteResponse)
-    const type = (activity as any).type || 'internal-note';
+    const type = activity.activityType || (activity as any).type || 'note';
     
     // Biểu tượng và màu sắc cho từng loại hoạt động
     const iconsByType: Record<string, { icon: React.ReactNode, bgColor: string }> = {
+      'note': {
+        icon: (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        ),
+        bgColor: 'bg-blue-500'
+      },
       'internal-note': {
         icon: (
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -178,7 +118,7 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
     };
     
     // Lấy biểu tượng và màu sắc cho loại hoạt động
-    const { icon, bgColor } = iconsByType[type] || iconsByType['internal-note'];
+    const { icon, bgColor } = iconsByType[type] || iconsByType['note'];
     
     return (
       <div className={`h-8 w-8 rounded-full ${bgColor} flex items-center justify-center text-white`}>
@@ -188,18 +128,18 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   };
   
   /**
-   * Format date to relative time (e.g., "2 hours ago")
+   * Format date to display relative to now in a human-readable way
    * @param {string} dateString - ISO date string to format
-   * @returns {string} Relative time string in Vietnamese
+   * @returns {string} Formatted date relative to now
    */
   const formatDate = (dateString: string) => {
     try {
-      return formatDistanceToNow(new Date(dateString), { 
+      return formatDistanceToNow(new Date(dateString), {
         addSuffix: true,
-        locale: vi 
+        locale: vi
       });
     } catch (e) {
-      return dateString;
+      return '';
     }
   };
   
@@ -231,7 +171,7 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   const groupedActivities = useMemo(() => {
     const groups: { [key: string]: OpportunityNoteResponse[] } = {};
     
-    activities.forEach(activity => {
+    notes.forEach(activity => {
       const date = new Date(activity.createdAt).toDateString();
       if (!groups[date]) {
         groups[date] = [];
@@ -247,10 +187,10 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
         formattedDate: formatDay(items[0].createdAt),
         items
       }));
-  }, [activities]);
+  }, [notes]);
   
   // Loading state
-  if (loading && page === 1) {
+  if (isLoading && notes.length === 0) {
     return (
       <div className="flex justify-center items-center p-8">
         <Spinner />
@@ -259,7 +199,7 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   }
   
   // Error state
-  if (error && !activities.length) {
+  if (error && notes.length === 0) {
     return (
       <Alert variant="error" className="my-4">
         {error}
@@ -268,45 +208,35 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   }
   
   // Empty state
-  if (!activities.length) {
+  if (notes.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-8 text-center my-4">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có ghi chú nào</h3>
-        <p className="text-gray-500">Thêm ghi chú đầu tiên để theo dõi lịch sử tương tác với cơ hội này.</p>
+      <div className="text-center py-8 text-gray-500">
+        Chưa có ghi chú hoặc hoạt động nào được ghi lại
       </div>
     );
   }
   
   return (
-    <div className="space-y-4">
-      {error && (
-        <Alert variant="error" className="mb-4">
-          {error}
-        </Alert>
-      )}
+    <div className="relative">
+      {/* Vertical line */}
+      <div className="absolute top-0 bottom-0 left-4 w-0.5 bg-gray-200" style={{ marginLeft: '11px' }}></div>
       
-      <div className="relative">
-        {/* Vertical line */}
-        <div className="absolute top-0 bottom-0 left-4 w-0.5 bg-gray-200" style={{ marginLeft: '11px' }}></div>
-        
-        {/* Activities grouped by date */}
-        <div className="space-y-8">
-          {groupedActivities.map((group) => (
-            <div key={group.date} className="space-y-6">
-              {/* Date header */}
-              <div className="flex items-center mb-4">
-                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 mr-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <span className="text-sm font-medium text-gray-700">{group.formattedDate}</span>
+      {/* Activities grouped by date */}
+      <div className="space-y-8">
+        {groupedActivities.map((group) => (
+          <div key={group.date} className="space-y-6">
+            {/* Date header */}
+            <div className="flex items-center mb-4">
+              <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
-              
-              {/* Activities for this date */}
+              <span className="text-sm font-medium text-gray-700">{group.formattedDate}</span>
+            </div>
+            
+            {/* Activities for this date */}
+            <div className="space-y-4">
               {group.items.map((activity) => (
                 <div key={activity.id} className="relative pl-10">
                   {/* Icon */}
@@ -320,21 +250,46 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <div className="flex items-center">
-                          <span className="font-medium">{activity.createdBy.name}</span>
+                          <span className="font-medium">
+                            {activity.createdBy ? activity.createdBy.name : (activity.authorName || 'Unknown User')}
+                          </span>
                           <span className="mx-2 text-gray-500">•</span>
                           <span className="text-sm text-gray-500">{formatDate(activity.createdAt)}</span>
-                        </div>
-                        
-                        {/* Tags would go here if they were part of the API response */}
-                        {/* {activity.tags && activity.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {activity.tags.map(tag => (
-                              <span key={tag} className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                {tag}
+                          
+                          {/* Hiển thị activityType nếu có */}
+                          {activity.activityType && (
+                            <>
+                              <span className="mx-2 text-gray-500">•</span>
+                              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                activity.activityType === 'note' ? 'bg-blue-100 text-blue-800' :
+                                activity.activityType === 'call' ? 'bg-green-100 text-green-800' :
+                                activity.activityType === 'email' ? 'bg-purple-100 text-purple-800' :
+                                activity.activityType === 'meeting' ? 'bg-amber-100 text-amber-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {activity.activityType === 'note' ? 'Ghi chú' :
+                                 activity.activityType === 'call' ? 'Cuộc gọi' :
+                                 activity.activityType === 'email' ? 'Email' :
+                                 activity.activityType === 'meeting' ? 'Cuộc họp' :
+                                 activity.activityType}
                               </span>
-                            ))}
-                          </div>
-                        )} */}
+                            </>
+                          )}
+
+                          {/* Hiển thị tags nếu có */}
+                          {activity.tags && activity.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {activity.tags.map((tag, tagIndex) => (
+                                <span 
+                                  key={tagIndex}
+                                  className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded-full"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       
                       <button
@@ -367,33 +322,26 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
                       />
                     </div>
                     
-                    {/* Expand/collapse button for long content */}
-                    {activity.content.length > 200 && !expandedIds.includes(activity.id) && (
-                      <button
-                        onClick={() => toggleExpand(activity.id)}
-                        className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        Xem thêm
-                      </button>
-                    )}
-                    
                     {/* Attachments */}
                     {activity.attachments && activity.attachments.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Tệp đính kèm:</p>
+                        <p className="text-xs text-gray-500 mb-2">Tài liệu đính kèm:</p>
                         <div className="flex flex-wrap gap-2">
-                          {activity.attachments.map(attachment => (
+                          {activity.attachments.map((file) => (
                             <a
-                              key={attachment.id}
-                              href={attachment.downloadUrl}
+                              key={file.id}
+                              href={file.downloadUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-sm hover:bg-gray-200 transition-colors"
+                              className="flex items-center p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 text-sm"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              {attachment.fileName}
+                              {/* File icon */}
+                              <span className="mr-2 text-gray-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </span>
+                              <span className="truncate max-w-[150px]">{file.fileName}</span>
                             </a>
                           ))}
                         </div>
@@ -403,27 +351,29 @@ const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
                 </div>
               ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
       
-      {/* Load more button */}
-      {page < totalPages && (
-        <div className="flex justify-center mt-6">
-          <button
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
+      {/* Load more */}
+      {hasMore && (
+        <div className="mt-8 text-center">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={onLoadMore}
+            isLoading={isLoading}
+            disabled={isLoading}
           >
-            {loadingMore ? (
-              <>
-                <Spinner className="h-4 w-4 mr-2" />
-                Đang tải...
-              </>
-            ) : (
-              'Tải thêm'
-            )}
-          </button>
+            Tải thêm
+          </Button>
+        </div>
+      )}
+      
+      {/* Loading indicator for load more */}
+      {isLoading && notes.length > 0 && !onLoadMore && (
+        <div className="flex justify-center items-center py-4">
+          <Spinner size="sm" />
         </div>
       )}
     </div>

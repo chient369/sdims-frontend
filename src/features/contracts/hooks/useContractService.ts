@@ -5,7 +5,9 @@ import {
   ContractListParams, 
   BulkEmployeeAssignmentData,
   ContractCreateData,
-  ContractUpdateData
+  ContractUpdateData,
+  PaymentTerm,
+  PaymentTermCreateData
 } from '../types';
 
 /**
@@ -72,6 +74,57 @@ export function useContractService() {
     return contractService.removeEmployeeFromContract(contractId, employeeId);
   };
 
+  /**
+   * Xóa hợp đồng
+   */
+  const deleteContract = async (id: string) => {
+    return contractService.deleteContract(id);
+  };
+
+  /**
+   * Lấy danh sách đợt thanh toán của hợp đồng
+   */
+  const getPaymentSchedule = async (contractId: string) => {
+    return contractService.getPaymentSchedule(contractId);
+  };
+
+  /**
+   * Thêm đợt thanh toán mới
+   */
+  const addPaymentScheduleItem = async (contractId: string, data: PaymentTermCreateData) => {
+    return contractService.addPaymentScheduleItem(contractId, data);
+  };
+
+  /**
+   * Cập nhật thông tin đợt thanh toán
+   */
+  const updatePaymentScheduleItem = async (
+    contractId: string, 
+    paymentId: string, 
+    data: Partial<PaymentTerm>
+  ) => {
+    return contractService.updatePaymentScheduleItem(contractId, paymentId, data);
+  };
+
+  /**
+   * Cập nhật trạng thái đợt thanh toán
+   */
+  const updatePaymentTermStatus = async (
+    contractId: string,
+    termId: string,
+    status: 'unpaid' | 'invoiced' | 'paid' | 'overdue',
+    paidDate?: string,
+    paidAmount?: number,
+    notes?: string
+  ) => {
+    return contractService.updateTermPaymentStatus(contractId, termId, {
+      status,
+      paidDate,
+      paidAmount,
+      notes
+    });
+  };
+
   return {
     getContracts,
     getContractById,
@@ -80,7 +133,12 @@ export function useContractService() {
     getContractEmployees,
     assignEmployeeToContract,
     assignEmployeesToContract,
-    removeEmployeeFromContract
+    removeEmployeeFromContract,
+    deleteContract,
+    getPaymentSchedule,
+    addPaymentScheduleItem,
+    updatePaymentScheduleItem,
+    updatePaymentTermStatus
   };
 }
 

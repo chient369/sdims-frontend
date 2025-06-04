@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../components/ui';
 import { ContractFilter, ContractTable, ContractSummary } from '../components';
@@ -6,6 +6,7 @@ import { ContractListParams, ContractSummary as ContractSummaryType } from '../t
 import { useContractService } from '../hooks/useContractService';
 import { PermissionGuard } from '../../../components/ui';
 import { PlusIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { useQuery } from '@tanstack/react-query';
 
 /**
  * ContractList là trang danh sách hợp đồng (MH-CTR-01)
@@ -19,13 +20,6 @@ const ContractList: React.FC = () => {
   const navigate = useNavigate();
   const contractService = useContractService();
   
-  // State cho danh sách hợp đồng và metadata
-  const [contracts, setContracts] = useState<ContractSummaryType[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalContracts, setTotalContracts] = useState<number>(0);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  
   // State cho việc lọc và phân trang
   const [filterParams, setFilterParams] = useState<ContractListParams>({
     page: 1,
@@ -34,27 +28,24 @@ const ContractList: React.FC = () => {
     sortDirection: 'desc'
   });
   
-  // Lấy danh sách hợp đồng từ API
-  const fetchContracts = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await contractService.getContracts(filterParams);
-      setContracts(response.data.content);
-      setTotalContracts(response.data.pageable.totalElements);
-      setTotalPages(response.data.pageable.totalPages);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching contracts:', err);
-      setError('Có lỗi xảy ra khi tải danh sách hợp đồng. Vui lòng thử lại sau.');
-    } finally {
-      setLoading(false);
-    }
-  }, [contractService, filterParams]);
-  
-  // Lấy danh sách hợp đồng khi component mount hoặc filterParams thay đổi
-  useEffect(() => {
-    fetchContracts();
-  }, [fetchContracts]);
+  // Sử dụng React Query để fetch dữ liệu
+  const { 
+    data, 
+    isLoading, 
+    isError, 
+    error 
+  } = useQuery({
+    queryKey: ['contracts', filterParams],
+    queryFn: () => contractService.getContracts(filterParams),
+    retry: 1, // Giới hạn số lần retry khi gọi API thất bại
+    retryDelay: 1000, // Thời gian chờ trước khi retry
+    staleTime: 60000, // Thời gian data được coi là tươi (60 giây)
+  });
+
+  // Lấy dữ liệu từ response
+  const contracts = data?.data?.content || [];
+  const totalContracts = data?.data?.pageable?.totalElements || 0;
+  const totalPages = data?.data?.pageable?.totalPages || 1;
   
   // Xử lý khi thay đổi filter
   const handleFilterChange = (newParams: Partial<ContractListParams>) => {
@@ -148,9 +139,10 @@ const ContractList: React.FC = () => {
         </Card>
         
         {/* Error message if any */}
-        {error && (
+        {isError && (
           <div className="bg-red-50 text-red-600 p-4 rounded-md">
-            {error}
+            Có lỗi xảy ra khi tải danh sách hợp đồng. Vui lòng thử lại sau.
+            {error instanceof Error && <p className="mt-2">{error.message}</p>}
           </div>
         )}
         
@@ -161,7 +153,7 @@ const ContractList: React.FC = () => {
             <Card className="h-full p-0 overflow-hidden">
               <ContractTable
                 contracts={contracts}
-                loading={loading}
+                loading={isLoading}
                 page={filterParams.page || 1}
                 limit={filterParams.size || 10}
                 total={totalContracts}
@@ -181,7 +173,7 @@ const ContractList: React.FC = () => {
             <Card className="h-full">
               <ContractSummary 
                 contracts={contracts}
-                loading={loading}
+                loading={isLoading}
               />
             </Card>
           </div>
