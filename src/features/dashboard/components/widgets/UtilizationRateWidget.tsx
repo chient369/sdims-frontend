@@ -1,21 +1,19 @@
 import React from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@components/ui/Card';
-import { GaugeChart } from '@components/charts/GaugeChart';
+import { UtilizationRateWidget as UtilizationRateWidgetType } from '../../types';
 
 interface UtilizationRateWidgetProps {
-  data: {
-    rate: number;
-    change: number;
-    periodLabel: string;
-  };
+  data?: UtilizationRateWidgetType;
   loading?: boolean;
+  timeframe?: 'week' | 'month' | 'quarter' | 'year';
 }
 
 export const UtilizationRateWidget: React.FC<UtilizationRateWidgetProps> = ({
   data,
   loading = false,
+  timeframe = 'month'
 }) => {
-  if (loading) {
+  if (loading || !data) {
     return (
       <Card className="h-full">
         <CardHeader>
@@ -30,11 +28,30 @@ export const UtilizationRateWidget: React.FC<UtilizationRateWidgetProps> = ({
     );
   }
   
-  // Xác định thresholds dựa trên tỷ lệ sử dụng
-  const thresholds = {
-    warning: 60,
-    danger: 80
+  // Lấy dữ liệu từ API
+  const utilizationRate = data.overall;
+  
+  // Tính toán sự thay đổi (nếu có trend data)
+  let changeValue = 0;
+  let previousPeriod = '';
+  
+  if (data.trend && data.trend.length >= 2) {
+    const currentMonth = data.trend[data.trend.length - 1];
+    const previousMonth = data.trend[data.trend.length - 2];
+    
+    changeValue = currentMonth.value - previousMonth.value;
+    previousPeriod = previousMonth.month;
+  }
+  
+  // Map thời gian hiển thị
+  const periodMap = {
+    'week': 'tuần trước',
+    'month': 'tháng trước',
+    'quarter': 'quý trước',
+    'year': 'năm trước'
   };
+  
+  const periodLabel = periodMap[timeframe] || 'kỳ trước';
   
   return (
     <Card className="h-full">
@@ -69,36 +86,54 @@ export const UtilizationRateWidget: React.FC<UtilizationRateWidgetProps> = ({
                 stroke="#3b82f6" 
                 strokeWidth="12" 
                 strokeDasharray="339.3" 
-                strokeDashoffset={339.3 - (339.3 * data.rate) / 100}
+                strokeDashoffset={339.3 - (339.3 * utilizationRate) / 100}
                 strokeLinecap="round"
                 transform="rotate(-90 60 60)"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-3xl font-bold">{data.rate}%</div>
+              <div className="text-3xl font-bold">{utilizationRate}%</div>
               <div className="text-xs text-gray-500">Utilization</div>
             </div>
           </div>
         </div>
-        <div className="mt-2 text-center">
-          <div className={`text-sm ${data.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {data.change >= 0 ? 
-              <span className="inline-flex items-center">
-                <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
-                +{Math.abs(data.change)}% từ {data.periodLabel}
-              </span> 
-              : 
-              <span className="inline-flex items-center">
-                <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-                -{Math.abs(data.change)}% từ {data.periodLabel}
-              </span>
-            }
+        
+        {changeValue !== 0 && (
+          <div className="mt-2 text-center">
+            <div className={`text-sm ${changeValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {changeValue >= 0 ? 
+                <span className="inline-flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                  +{Math.abs(changeValue)}% từ {periodLabel}
+                </span> 
+                : 
+                <span className="inline-flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                  -{Math.abs(changeValue)}% từ {periodLabel}
+                </span>
+              }
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Hiển thị tỷ lệ sử dụng theo team nếu có */}
+        {data.byTeam && data.byTeam.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-sm font-medium mb-2">Tỷ lệ theo Team</h4>
+            <div className="space-y-2">
+              {data.byTeam.map((team, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <span className="truncate">{team.team}</span>
+                  <span className="font-medium">{team.rate}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

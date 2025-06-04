@@ -12,11 +12,3 @@ export {
   createAbortController,
   getErrorMessage,
 } from './core/utils';
-
-// Feature module exports
-export * from './features/auth';
-export * from './features/hrm';
-export * from './features/contracts';
-export * from './features/opportunities';
-export * from './features/margin';
-export * from './features/admin';

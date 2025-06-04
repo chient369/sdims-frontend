@@ -35,6 +35,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
         <Button
           variant="outline"
           onClick={onClose}
+          type="button"
         >
           {cancelLabel}
         </Button>
@@ -44,6 +45,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             onConfirm();
             onClose();
           }}
+          type="button"
         >
           {confirmLabel}
         </Button>

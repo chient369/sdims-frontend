@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/Card';
-import { PermissionGuard } from '@components/ui';
+import PermissionGuard from '@components/ui/PermissionGuard';
 import { 
   TimeRangeFilter, 
   DashboardAlert,
-  TeamFilter,
+} from './components';
+import TeamFilter from './components/TeamFilter';
+import { 
   EmployeeAvailableWidget, 
   EmployeeEndingSoonWidget,
   UtilizationRateWidget,
@@ -14,7 +16,7 @@ import {
   SalesFunnelWidget,
   RevenueWidget,
   DebtWidget
-} from './components';
+} from './components/widgets';
 import { getDashboardSummary } from './api';
 import { getAvailableEmployees } from '../hrm/api';
 import { getUtilizationReport } from '../reports/api';
@@ -44,8 +46,6 @@ const Dashboard: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
   const [availableEmployees, setAvailableEmployees] = useState<any[]>([]);
   const [endingSoonEmployees, setEndingSoonEmployees] = useState<any[]>([]);
-  const [utilizationRate, setUtilizationRate] = useState<number>(0);
-  const [utilizationChange, setUtilizationChange] = useState<number>(0);
   const [showAlert, setShowAlert] = useState<boolean>(true);
 
   const { 
@@ -68,11 +68,42 @@ const Dashboard: React.FC = () => {
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      // Thêm teamId vào params nếu đã chọn
+      // Chuẩn bị thời gian cho API
+      const today = new Date();
+      let fromDate = new Date(today);
+      
+      switch(timeframe) {
+        case 'week':
+          fromDate.setDate(today.getDate() - 7);
+          break;
+        case 'month':
+          fromDate.setMonth(today.getMonth() - 1);
+          break;
+        case 'quarter':
+          fromDate.setMonth(today.getMonth() - 3);
+          break;
+        case 'year':
+          fromDate.setFullYear(today.getFullYear() - 1);
+          break;
+      }
+      
+      const fromDateStr = fromDate.toISOString().split('T')[0];
+      const toDateStr = today.toISOString().split('T')[0];
+      
+      // Thêm fromDate, toDate và teamId vào params
       const params = { 
-        timeframe,
-        teamId: selectedTeamId || undefined
+        fromDate: fromDateStr,
+        toDate: toDateStr,
+        teamId: selectedTeamId || undefined,
+        widgets: [
+          "opportunity_status", 
+          "margin_distribution", 
+          "revenue_summary", 
+          "employee_status", 
+          "utilization_rate"
+        ]
       };
+      
       const data = await getDashboardSummary(params);
       setDashboardData(data);
     } catch (error) {
@@ -85,7 +116,7 @@ const Dashboard: React.FC = () => {
   // Tạo hàm fetchHRData bên ngoài useEffect để sử dụng với useCallback
   const fetchHRData = useCallback(async () => {
     // Kiểm tra quyền trước khi fetch dữ liệu
-    if (!permissionChecks.canViewEmployees && !permissionChecks.canViewUtilization) {
+    if (!permissionChecks.canViewEmployees) {
       return;
     }
     
@@ -147,110 +178,83 @@ const Dashboard: React.FC = () => {
           setEndingSoonEmployees(mockEndingSoon);
         }
       }
-      
-      // Tải dữ liệu utilization rate
-      if (permissionChecks.canViewUtilization) {
-        const today = new Date();
-        let fromDate = new Date(today);
-        
-        switch(timeframe) {
-          case 'week':
-            fromDate.setDate(today.getDate() - 7);
-            break;
-          case 'month':
-            fromDate.setMonth(today.getMonth() - 1);
-            break;
-          case 'quarter':
-            fromDate.setMonth(today.getMonth() - 3);
-            break;
-          case 'year':
-            fromDate.setFullYear(today.getFullYear() - 1);
-            break;
-        }
-        
-        const fromDateStr = fromDate.toISOString().split('T')[0];
-        const toDateStr = today.toISOString().split('T')[0];
-        
-        try {
-          const response = await getUtilizationReport({
-            fromDate: fromDateStr,
-            toDate: toDateStr,
-            teamId: selectedTeamId ? parseInt(selectedTeamId, 10) : undefined,
-            period: timeframe,
-          });
-          
-          if (!(response instanceof Blob)) {
-            setUtilizationRate(response.summary.averageUtilization);
-            setUtilizationChange(5); // Mock data - thay đổi so với kỳ trước
-          }
-        } catch (error) {
-          console.error('Error fetching utilization data:', error);
-          setUtilizationRate(78);
-          setUtilizationChange(2);
-        }
-      }
     } catch (error) {
       console.error('Error fetching HR data:', error);
     } finally {
       setLoadingHR(false);
     }
-  }, [timeframe, selectedTeamId, permissionChecks.canViewEmployees, permissionChecks.canViewUtilization]);
+  }, [timeframe, selectedTeamId, permissionChecks.canViewEmployees]);
 
   // Load data khi component mount hoặc khi dependencies thay đổi
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Tải dữ liệu HR trong useEffect riêng biệt
-  useEffect(() => {
     fetchHRData();
-  }, [fetchHRData]);
-  
+  }, [fetchDashboardData, fetchHRData]);
+
   const handleTimeframeChange = (newTimeframe: 'week' | 'month' | 'quarter' | 'year') => {
     setTimeframe(newTimeframe);
-    // Lưu timeframe vào localStorage để giữ trạng thái cho lần sau
-    localStorage.setItem('dashboard_timeframe', newTimeframe);
   };
-  
+
   const handleTeamChange = (teamId: string | null) => {
     setSelectedTeamId(teamId);
-    // Lưu teamId vào localStorage
-    if (teamId) {
-      localStorage.setItem('dashboard_teamId', teamId);
-    } else {
-      localStorage.removeItem('dashboard_teamId');
-    }
   };
-  
+
   const handleDismissAlert = () => {
     setShowAlert(false);
   };
-  
-  // Load saved filters from localStorage
-  useEffect(() => {
-    const savedTimeframe = localStorage.getItem('dashboard_timeframe');
-    if (savedTimeframe) {
-      setTimeframe(savedTimeframe as 'week' | 'month' | 'quarter' | 'year');
+
+  // Lấy các widget data từ dashboard response
+  const opportunityStatusData = dashboardData?.widgets.opportunity_status;
+  const marginDistributionData = dashboardData?.widgets.margin_distribution;
+  const revenueSummaryData = dashboardData?.widgets.revenue_summary;
+  const employeeStatusData = dashboardData?.widgets.employee_status;
+  const utilizationRateData = dashboardData?.widgets.utilization_rate;
+
+  // Tạo dữ liệu tạm thời cho DebtWidget từ revenueSummaryData
+  const debtData = revenueSummaryData?.payment ? {
+    totalTransactions: 3, // Giả sử
+    totalAmount: revenueSummaryData.payment.totalDue,
+    overdue: {
+      amount: revenueSummaryData.payment.overdue,
+      transactions: 3 // Giả sử
     }
-    
-    const savedTeamId = localStorage.getItem('dashboard_teamId');
-    if (savedTeamId) {
-      setSelectedTeamId(savedTeamId);
+  } : {
+    totalTransactions: 0,
+    totalAmount: 0,
+    overdue: {
+      amount: 0,
+      transactions: 0
     }
-  }, []);
-  
-  // Chuẩn bị dữ liệu cho các widget
+  };
+
+  // Chuyển đổi dữ liệu cho SalesFunnelWidget
+  const salesFunnelData = opportunityStatusData?.byDealStage ? {
+    stages: opportunityStatusData.byDealStage.map(stage => ({
+      stage: stage.stage,
+      count: stage.count,
+      value: 1000000 * stage.count // Giả sử giá trị trung bình mỗi cơ hội là 1M
+    })),
+    totalValue: opportunityStatusData.byDealStage.reduce((sum, stage) => sum + 1000000 * stage.count, 0),
+    conversionRate: 15.6 // Giả sử
+  } : {
+    stages: [],
+    totalValue: 0,
+    conversionRate: 0
+  };
+
+  // Adapter cho EmployeeAvailableWidget
   const employeeAvailableData = {
     totalEmployees: availableEmployees?.length || 0,
-    change: 3, // Mock data - thay đổi so với kỳ trước
+    change: 3, // Mock data
     periodLabel: timeframe === 'week' ? 'tuần trước' : 
                 timeframe === 'month' ? 'tháng trước' : 
                 timeframe === 'quarter' ? 'quý trước' : 'năm trước'
   };
-  
+
+  // Adapter cho EmployeeEndingSoonWidget
   const employeeEndingSoonData = {
     totalEmployees: endingSoonEmployees?.length || 0,
-    change: -2, // Mock data - thay đổi so với kỳ trước
+    change: 1, // Mock data
     periodLabel: timeframe === 'week' ? 'tuần trước' : 
                 timeframe === 'month' ? 'tháng trước' : 
                 timeframe === 'quarter' ? 'quý trước' : 'năm trước',
@@ -260,220 +264,192 @@ const Dashboard: React.FC = () => {
       projectEndDate: emp.projectEndDate
     }))
   };
-  
-  const utilizationRateData = {
-    rate: utilizationRate,
-    change: utilizationChange,
-    periodLabel: timeframe === 'week' ? 'tuần trước' : 
-                timeframe === 'month' ? 'tháng trước' : 
-                timeframe === 'quarter' ? 'quý trước' : 'năm trước'
+
+  // Adapter cho RevenueWidget
+  const revenueData = revenueSummaryData ? {
+    target: revenueSummaryData.currentMonth.target,
+    actual: revenueSummaryData.currentMonth.actual,
+    achievement: revenueSummaryData.currentMonth.achievement
+  } : {
+    target: 0,
+    actual: 0,
+    achievement: 0
   };
-  
-  // Mock data khi chưa có data thật
-  const mockData = {
-    employeeAvailable: employeeAvailableData,
-    employeeEndingSoon: employeeEndingSoonData,
-    utilizationRate: utilizationRateData,
-    marginDistribution: {
-      distribution: {
-        green: { count: 60, percentage: 60 },
-        yellow: { count: 25, percentage: 25 },
-        red: { count: 15, percentage: 15 }
+
+  // Adapter cho MarginDistributionWidget
+  const marginData = marginDistributionData ? {
+    distribution: {
+      green: { 
+        count: marginDistributionData.distribution.green.count, 
+        percentage: marginDistributionData.distribution.green.percentage 
       },
-      totalEmployees: 100
-    },
-    newOpportunities: {
-      totalOpportunities: 23,
-      change: 7,
-      periodLabel: 'tuần trước'
-    },
-    followOpportunities: {
-      totalOpportunities: 9,
-      change: 2,
-      periodLabel: 'tuần trước'
-    },
-    salesFunnel: {
-      stages: [
-        { stage: 'Mới', count: 45, value: 1000000000 },
-        { stage: 'Liên hệ', count: 32, value: 800000000 },
-        { stage: 'Đánh giá', count: 24, value: 600000000 },
-        { stage: 'Đề xuất', count: 18, value: 400000000 },
-        { stage: 'Đàm phán', count: 12, value: 300000000 },
-        { stage: 'Thành công', count: 7, value: 200000000 }
-      ],
-      totalValue: 3300000000,
-      conversionRate: 15.6
-    },
-    revenue: {
-      target: 410000000,
-      actual: 348500000,
-      achievement: 85
-    },
-    debt: {
-      totalTransactions: 3,
-      totalAmount: 1500000000,
-      overdue: {
-        amount: 800000000,
-        transactions: 3
+      yellow: { 
+        count: marginDistributionData.distribution.yellow.count, 
+        percentage: marginDistributionData.distribution.yellow.percentage 
+      },
+      red: { 
+        count: marginDistributionData.distribution.red.count, 
+        percentage: marginDistributionData.distribution.red.percentage 
       }
-    }
+    },
+    totalEmployees: marginDistributionData.totalEmployees
+  } : {
+    distribution: {
+      green: { count: 0, percentage: 0 },
+      yellow: { count: 0, percentage: 0 },
+      red: { count: 0, percentage: 0 }
+    },
+    totalEmployees: 0
   };
-  
+
   return (
-    <div className="p-4 md:p-0">
-      {/* Bộ lọc dashboard */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="w-full sm:w-48">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Bộ phận/Team
-          </label>
-          <TeamFilter 
-            selectedTeamId={selectedTeamId}
-            onTeamChange={handleTeamChange}
-          />
-        </div>
-        
-        <TimeRangeFilter
-          currentTimeframe={timeframe}
-          onTimeframeChange={handleTimeframeChange}
-        />
-      </div>
-      
-      {/* Thông báo quan trọng */}
-      {canViewEmployeeWidgets() && showAlert && (
+    <div className="container mx-auto p-4">
+      {showAlert && (
         <div className="mb-6">
-          <DashboardAlert
-            title="Thông báo quan trọng"
-            message="5 nhân viên đang ở trạng thái margin đỏ cần được xem xét"
-            type="warning"
-            hasDismissAction={true}
-            hasViewAction={true}
-            viewActionLabel="Xem chi tiết"
-            viewActionUrl="/margin/employees?status=red"
+          <DashboardAlert 
+            title="Chào mừng trở lại!"
+            message="Bạn có 5 cơ hội kinh doanh cần theo dõi và 3 khoản thanh toán đến hạn trong tuần này."
+            type="info"
             onDismiss={handleDismissAlert}
           />
         </div>
       )}
       
-      {/* Row 1: HR Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="md:col-span-1">
-          {canViewEmployeeWidgets() ? (
-            <EmployeeAvailableWidget 
-              data={mockData.employeeAvailable}
-              loading={loadingHR}
-            />
-          ) : (
-            <WidgetFallback title="Nhân sự Sẵn sàng" />
-          )}
-        </div>
-        <div className="md:col-span-1">
-          {canViewEmployeeWidgets() ? (
-            <EmployeeEndingSoonWidget
-              data={mockData.employeeEndingSoon}
-              loading={loadingHR}
-            />
-          ) : (
-            <WidgetFallback title="Nhân sự Sắp hết Dự án" />
-          )}
-        </div>
-        <div className="md:col-span-1">
-          {canViewUtilizationWidget() ? (
-            <UtilizationRateWidget
-              data={mockData.utilizationRate}
-              loading={loadingHR}
-            />
-          ) : (
-            <WidgetFallback title="Tỷ lệ Sử dụng Nguồn lực" />
-          )}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          <TeamFilter onTeamChange={handleTeamChange} selectedTeamId={selectedTeamId} />
+          <TimeRangeFilter onTimeframeChange={handleTimeframeChange} currentTimeframe={timeframe} />
         </div>
       </div>
       
-      {/* Row 2: Margin and Opportunity Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="md:col-span-1">
-          {canViewMarginWidget() ? (
-            <MarginDistributionWidget
-              data={mockData.marginDistribution}
-              loading={loading}
-            />
-          ) : (
-            <WidgetFallback title="Phân bố Margin" />
-          )}
-        </div>
-        <div className="md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <PermissionGuard requiredPermission={['opportunity:read:all', 'opportunity:read:team']}>
           {canViewOpportunityWidgets() ? (
             <OpportunityWidget
-              data={mockData.newOpportunities}
-              type="new"
-              loading={loading}
-            />
-          ) : (
-            <WidgetFallback title="Cơ hội Mới" />
-          )}
-        </div>
-        <div className="md:col-span-1">
-          {canViewOpportunityWidgets() ? (
-            <OpportunityWidget
-              data={mockData.followOpportunities}
-              type="follow"
-              loading={loading}
-            />
-          ) : (
-            <WidgetFallback title="Cơ hội Cần Theo dõi" />
-          )}
-        </div>
-      </div>
-      
-      {/* Row 3: Contract, Revenue, Debt */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="md:col-span-1">
-          {canViewOpportunityWidgets() ? (
-            <OpportunityWidget
-              data={{ 
-                totalOpportunities: 7, 
-                change: 0, 
-                periodLabel: 'tuần trước' 
-              }}
+              data={opportunityStatusData}
               type="all"
               loading={loading}
+              timeframe={timeframe}
             />
           ) : (
             <WidgetFallback title="Tổng số Cơ hội" />
           )}
-        </div>
-        <div className="md:col-span-1">
+        </PermissionGuard>
+        
+        <PermissionGuard requiredPermission={['opportunity:read:all', 'opportunity:read:team']}>
+          {canViewOpportunityWidgets() ? (
+            <OpportunityWidget 
+              data={opportunityStatusData}
+              type="new"
+              loading={loading}
+              timeframe={timeframe}
+            />
+          ) : (
+            <WidgetFallback title="Cơ hội Mới" />
+          )}
+        </PermissionGuard>
+        
+        <PermissionGuard requiredPermission={['opportunity:read:all', 'opportunity:read:team']}>
+          {canViewOpportunityWidgets() ? (
+            <OpportunityWidget
+              data={opportunityStatusData}
+              type="follow"
+              loading={loading}
+              timeframe={timeframe}
+            />
+          ) : (
+            <WidgetFallback title="Cơ hội Cần Theo dõi" />
+          )}
+        </PermissionGuard>
+        
+        <PermissionGuard requiredPermission={['contract:read:all', 'contract:read:team']}>
           {canViewRevenueWidget() ? (
-            <RevenueWidget
-              data={mockData.revenue}
+            <DebtWidget 
+              data={debtData}
               loading={loading}
             />
           ) : (
-            <WidgetFallback title="Doanh thu vs KPI" />
+            <WidgetFallback title="Khoản thanh toán" />
           )}
+        </PermissionGuard>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className="lg:col-span-2">
+          <PermissionGuard requiredPermission={['opportunity:read:all', 'opportunity:read:team']}>
+            {canViewSalesFunnelWidget() ? (
+              <SalesFunnelWidget 
+                data={salesFunnelData} 
+                loading={loading} 
+              />
+            ) : (
+              <WidgetFallback title="Phễu Sales" />
+            )}
+          </PermissionGuard>
         </div>
-        <div className="md:col-span-1">
-          {canViewDebtWidget() ? (
-            <DebtWidget
-              data={mockData.debt}
-              loading={loading}
-            />
-          ) : (
-            <WidgetFallback title="Công nợ Quá hạn" />
-          )}
+        
+        <div>
+          <PermissionGuard requiredPermission={['employee:read:all', 'employee:read:team']}>
+            {canViewEmployeeWidgets() ? (
+              <EmployeeAvailableWidget 
+                data={employeeAvailableData} 
+                loading={loadingHR} 
+              />
+            ) : (
+              <WidgetFallback title="Nhân viên Sẵn sàng" />
+            )}
+          </PermissionGuard>
         </div>
       </div>
       
-      {/* Row 4: Sales Funnel */}
-      <div className="grid grid-cols-1 gap-6">
-        {canViewSalesFunnelWidget() ? (
-          <SalesFunnelWidget
-            data={mockData.salesFunnel}
-            loading={loading}
-          />
-        ) : (
-          <WidgetFallback title="Phễu Bán hàng" />
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <PermissionGuard requiredPermission={['revenue:read:all', 'revenue:read:team']}>
+          {canViewRevenueWidget() ? (
+            <RevenueWidget 
+              data={revenueData} 
+              loading={loading} 
+            />
+          ) : (
+            <WidgetFallback title="Tổng quan Doanh thu" />
+          )}
+        </PermissionGuard>
+        
+        <PermissionGuard requiredPermission={['margin:read:all', 'margin:read:team']}>
+          {canViewMarginWidget() ? (
+            <MarginDistributionWidget 
+              data={marginData} 
+              loading={loading} 
+            />
+          ) : (
+            <WidgetFallback title="Phân bố Biên lợi nhuận" />
+          )}
+        </PermissionGuard>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PermissionGuard requiredPermission={['employee:read:all', 'employee:read:team']}>
+          {canViewEmployeeWidgets() ? (
+            <EmployeeEndingSoonWidget 
+              data={employeeEndingSoonData} 
+              loading={loading || loadingHR} 
+            />
+          ) : (
+            <WidgetFallback title="Nhân viên Sắp Hết Dự án" />
+          )}
+        </PermissionGuard>
+        
+        <PermissionGuard requiredPermission={['utilization:read:all', 'utilization:read:team']}>
+          {canViewUtilizationWidget() ? (
+            <UtilizationRateWidget 
+              data={utilizationRateData} 
+              loading={loading}
+              timeframe={timeframe}
+            />
+          ) : (
+            <WidgetFallback title="Tỷ lệ Sử dụng Nguồn lực" />
+          )}
+        </PermissionGuard>
       </div>
     </div>
   );

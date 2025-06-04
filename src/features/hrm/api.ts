@@ -8,6 +8,7 @@
 
 import apiClient from '../../services/core/axios';
 import { AxiosRequestConfig } from 'axios';
+import axios from 'axios'; // Import global axios
 import {
   // Employee types
   EmployeeListParams,
@@ -20,6 +21,7 @@ import {
   EmployeeDeleteResponse,
   EmployeeSuggestionsResponseWrapper,
   PaginatedEmployeeResponse,
+  NewEmployeeApiResponse,
   
   // Skill types
   SkillCategoryResponse,
@@ -30,6 +32,7 @@ import {
   EmployeeSkillCreateData,
   EmployeeSkillDeleteResponse,
   NewPaginatedEmployeeSkillsResponse,
+  NewEmployeeSkillResponse,
   
   // Team types
   TeamInfo,
@@ -58,21 +61,21 @@ export const getEmployees = async (params?: EmployeeListParams, config?: AxiosRe
 /**
  * Get employee by ID
  */
-export const getEmployeeById = async (id: string, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
+export const getEmployeeById = async (id: string, config?: AxiosRequestConfig): Promise<NewEmployeeApiResponse> => {
   return apiClient.get(`/api/v1/employees/${id}`, config);
 };
 
 /**
  * Get employee by ID (alias for getEmployeeById for compatibility)
  */
-export const getEmployee = async (id: number, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
+export const getEmployee = async (id: number, config?: AxiosRequestConfig): Promise<NewEmployeeApiResponse> => {
   return getEmployeeById(id.toString(), config);
 };
 
 /**
  * Create a new employee
  */
-export const createEmployee = async (data: EmployeeCreateData, config?: AxiosRequestConfig): Promise<EmployeeResponse> => {
+export const createEmployee = async (data: EmployeeCreateData, config?: AxiosRequestConfig): Promise<NewEmployeeApiResponse> => {
   return apiClient.post('/api/v1/employees', data, config);
 };
 
@@ -84,7 +87,7 @@ export const updateEmployee = async (
   id: string | number, 
   data: EmployeeUpdateData | Partial<EmployeeCreateData>, 
   config?: AxiosRequestConfig
-): Promise<EmployeeResponse> => {
+): Promise<NewEmployeeApiResponse> => {
   const idString = typeof id === 'number' ? id.toString() : id;
   return apiClient.put(`/api/v1/employees/${idString}`, data, config);
 };
@@ -331,24 +334,59 @@ export const deleteSkill = async (skillId: string, config?: AxiosRequestConfig):
 /**
  * Get all skills for an employee
  */
-export const getEmployeeSkills = async (
+export const getEmployeeSkills = (
   employeeId: string,
   params?: Omit<EmployeeSkillsParams, 'employeeId'>,
-  config?: AxiosRequestConfig
-): Promise<NewPaginatedEmployeeSkillsResponse | EmployeeSkillsResponse> => {
-  const response = await apiClient.get(`/api/v1/employees/${employeeId}/skills`, {
-    ...config,
-    params
-  });
+  // config?: AxiosRequestConfig // Original config might not be directly applicable to global axios without baseURL
+): Promise<NewPaginatedEmployeeSkillsResponse | NewEmployeeSkillResponse[]> => {
+  const shouldUseAllEndpoint = !params || Object.keys(params).length === 0 || (params as any).all === true;
   
-  // Chuyển đổi response.data thành kiểu phù hợp
-  if (response.data && 'content' in response.data) {
-    // Đây là cấu trúc mới
-    return response.data as NewPaginatedEmployeeSkillsResponse;
+  // Construct full URL
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const relativePath = shouldUseAllEndpoint 
+    ? `/api/v1/employees/${employeeId}/skills/all` 
+    : `/api/v1/employees/${employeeId}/skills`;
+  const fullUrl = `${baseUrl}${relativePath}`;
+
+  console.log(`[api.ts getEmployeeSkills DirectAxios] Calling: ${fullUrl} for employeeId: ${employeeId}, params:`, params);
+
+  // Prepare headers, including Authorization from sessionStorage
+  const token = sessionStorage.getItem('token');
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json', // Usually needed for POST/PUT, but good for consistency
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
-  
-  // Đây là cấu trúc cũ
-  return response.data as EmployeeSkillsResponse;
+
+  if (shouldUseAllEndpoint) {
+    return axios.get<NewEmployeeSkillResponse[]>(fullUrl, { headers, params: shouldUseAllEndpoint ? undefined : params })
+      .then(response => {
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills/all] Response from axios.get.then:`, JSON.parse(JSON.stringify(response)));
+        const dataToReturn = response.data;
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills/all] Assigned response.data to dataToReturn:`, dataToReturn);
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills/all] Returning dataToReturn:`, dataToReturn);
+        return dataToReturn;
+      })
+      .catch(error => {
+        console.error(`[api.ts getEmployeeSkills DirectAxios /skills/all] Error fetching from ${fullUrl}:`, error);
+        throw error;
+      });
+  } else {
+    return axios.get<NewPaginatedEmployeeSkillsResponse>(fullUrl, { headers, params })
+      .then(response => {
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills] Response from axios.get.then:`, JSON.parse(JSON.stringify(response)));
+        const dataToReturn = response.data;
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills] Assigned response.data to dataToReturn:`, dataToReturn);
+        console.log(`[api.ts getEmployeeSkills DirectAxios /skills] Returning dataToReturn:`, dataToReturn);
+        return dataToReturn;
+      })
+      .catch(error => {
+        console.error(`[api.ts getEmployeeSkills DirectAxios /skills] Error fetching from ${fullUrl}:`, error);
+        throw error;
+      });
+  }
 };
 
 /**

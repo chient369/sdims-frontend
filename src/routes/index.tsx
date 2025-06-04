@@ -14,10 +14,6 @@ const Login = lazy(() => import('@features/auth/Login'));
 const Dashboard = lazy(() => import('@features/dashboard/Dashboard'));
 const NotFound = lazy(() => import('@features/errors/NotFound'));
 const Unauthorized = lazy(() => import('@features/errors/Unauthorized'));
-const ComponentDemo = lazy(() => import('../pages/ComponentDemo'));
-const StateManagementDemo = lazy(() => import('../pages/StateManagementDemo'));
-const NotificationExample = lazy(() => import('../components/examples/NotificationExample'));
-const ChartExamplesPage = lazy(() => import('../pages/ChartExamplesPage'));
 const MarginList = lazy(() => import('@features/margin/pages/MarginList'));
 const CostInputPage = lazy(() => import('@features/margin/pages/CostInputPage'));
 
@@ -26,7 +22,6 @@ import { PrivateRoute, PublicRoute, AuthRoutes } from '../features/auth/routes';
 import { OpportunityRoutes } from '../features/opportunities/routes';
 import { ContractRoutes } from '../features/contracts/routes';
 import { HRMRoutes } from '../features/hrm/routes';
-import MarginRoutes from '../features/margin/routes';
 import { ReportsRoutes } from '../features/reports/routes';
 import { DashboardRoutes } from '../features/dashboard/routes';
 import { AdminRoutes } from '../features/admin/routes';
@@ -91,14 +86,6 @@ const AppRouter = () => {
                     ))}
                   </Route>
               ))}
-              
-              {/* Demo pages - with Layout */}
-              <Route path="/design-system" element={<ComponentDemo />} />
-              <Route path="/state-management-demo" element={<StateManagementDemo />} />
-              <Route path="/notification-demo" element={<NotificationExample />} />
-              <Route path="/chart-examples" element={<ChartExamplesPage />} />
-              <Route path="/payment-status-update-demo" element={<PaymentStatusUpdateDemo />} />
-              
               {/* Feature routes */}
               {(OpportunityRoutes as AppRoute[]).map((route, index) => (
                 route.path ? 

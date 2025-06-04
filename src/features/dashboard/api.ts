@@ -48,17 +48,43 @@ export const getDashboardSummary = async (params?: DashboardParams, config?: Axi
   }
   
   try {
+    // Chuẩn bị các widget cần lấy dữ liệu
+    const widgetsParam = params?.widgets?.join(',') || 
+      "opportunity_status,margin_distribution,revenue_summary,employee_status,utilization_rate";
+    
     const response = await apiClient.get('/api/v1/dashboard/summary', {
       ...config,
       params: {
         fromDate: params?.fromDate,
         toDate: params?.toDate,
         teamId: params?.teamId,
-        widgets: params?.widgets?.join(',')
+        widgets: widgetsParam
       },
     });
     
-    return response.data;
+    // Chuyển đổi response thành format mà ứng dụng mong đợi
+    const responseData = response.data;
+    
+    if (responseData.success) {
+      // Map dữ liệu từ định dạng API sang định dạng frontend
+      const result: DashboardSummary = {
+        dateRange: {
+          fromDate: params?.fromDate || '',
+          toDate: params?.toDate || ''
+        },
+        widgets: {
+          opportunity_status: responseData.data.opportunityStatus,
+          margin_distribution: responseData.data.marginDistribution,
+          revenue_summary: responseData.data.revenueSummary,
+          employee_status: responseData.data.employeeStatus,
+          utilization_rate: responseData.data.utilizationRate
+        }
+      };
+      
+      return result;
+    } else {
+      throw new Error(responseData.message || 'Failed to get dashboard data');
+    }
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.error('Failed to get dashboard summary, using mock data instead', error);

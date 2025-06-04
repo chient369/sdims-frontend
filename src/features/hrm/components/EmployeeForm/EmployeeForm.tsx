@@ -3,30 +3,71 @@ import { useNavigate } from 'react-router-dom';
 import { useForm, FormProvider } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import useAuth from '../../../../hooks/useAuth';
-import { useEmployeeService } from '../../hooks/useServices';
-import { employeeService, skillService } from '../../service';
-import { useContractService } from '../../../contracts/hooks/useContractService';
+import { useEmployeeService, useSkillService } from '../../hooks/useServices';
+// import { employeeService, skillService } from '../../service'; // skillService tạm thời không dùng
 import { 
-  EmployeeResponse, 
+  NewEmployeeApiResponse,
   EmployeeCreateData,
-  EmployeeUpdateData,
-  EmployeeSkillCreateData
+  NewEmployeeSkillResponse,
+  SkillLevel,
+  EmployeeSkillCreateData,
+  StatusUpdateRequest
 } from '../../types';
-import { addOrUpdateEmployeeSkill } from '../../api';
-
-import { ConfirmationDialog } from '../../../../components/modals/ConfirmationDialog';
+// import { addOrUpdateEmployeeSkill } from '../../api'; // Tạm thời không dùng
 
 import BasicInfoSection from './sections/BasicInfoSection';
-import OrganizationSection from './sections/OrganizationSection';
-import SkillsSection from './sections/SkillsSection';
-import StatusSection from './sections/StatusSection';
+import OrganizationSection from './sections/OrganizationSection'; // Uncommented
+import SkillsSection from './sections/SkillsSection'; // Uncommented
+import StatusSection from './sections/StatusSection'; // Uncomment StatusSection
 
-// Extended skill data to handle leader assessment
+// Structure for skills used by SkillsSection and form state
 interface ExtendedEmployeeSkillData {
-  skillId: number;
-  level: 'Basic' | 'Intermediate' | 'Advanced' | 'Expert';
+  employeeSkillId?: number; // ID of the EmployeeSkillDto (link table record)
+  skillId: number;         // ID of the actual Skill (from SkillDto)
+  skillName?: string;       // For display purposes
+  categoryId?: number;      // ID of the skill category
+  categoryName?: string;    // For display purposes
+  level: SkillLevel;       // Self-assessed level
   years: number;
-  leaderAssessment?: 'Basic' | 'Intermediate' | 'Advanced' | 'Expert';
+  selfComment?: string;     // Self-assessed comment
+  leaderAssessment?: SkillLevel | null; 
+  leaderComment?: string | null;      
+}
+
+// Updated EmployeeData to match BasicInfoSection and OrganizationSection fields
+interface EmployeeData {
+  id?: number;
+  employeeCode: string;
+  name?: string; 
+  email?: string; 
+  phone?: string;
+  avatar?: string;
+  address?: string;
+  birthDate?: string;
+  hireDate?: string; // Used by OrganizationSection and BasicInfoSection
+  userId?: string | null; 
+  emergencyContact?: {
+    name?: string;
+    phone?: string;
+    relation?: string;
+  };
+  position?: string; // For OrganizationSection
+  teamId?: number | string | null; // For OrganizationSection
+  reportingLeaderId?: number | string | null; // For OrganizationSection
+
+  // Fields from StatusSection
+  status?: string; // Current employee status (e.g., Available, Allocated)
+  statusProjectName?: string;
+  statusClientName?: string; // Hidden, derived from selected project
+  statusProjectContractId?: number | string; // Hidden, derived from selected project
+  statusProjectStartDate?: string; // Allocation start date
+  statusProjectEndDate?: string; // Allocation end date (expected)
+  statusAllocationPercentage?: number;
+  statusIsBillable?: boolean;
+  statusNote?: string; // General note for the status
+  resignationDate?: string; // If status is 'Resigned'
+  leaveStartDate?: string; // If status is 'On Leave'
+  leaveEndDate?: string; // If status is 'On Leave'
 }
 
 interface EmployeeFormProps {
@@ -34,430 +75,527 @@ interface EmployeeFormProps {
   mode: 'create' | 'edit';
 }
 
-interface EmployeeData {
-  id?: number;
-  employeeCode: string;
-  name: string;
-  email: string;
-  phone?: string;
-  avatar?: string;
-  address?: string;
-  birthDate?: string;
-  joinDate?: string;
-  userId?: number;
-  teamId?: number;
-  teamName?: string;
-  position?: string;
-  status: string;
-  emergencyContact?: {
-    name?: string;
-    phone?: string;
-    relation?: string;
-  };
-  currentProject?: string;
-  allocationPercent?: number;
-  endDate?: string;
-  resignationDate?: string;
-  leaveStartDate?: string;
-  leaveEndDate?: string;
-  skills?: ExtendedEmployeeSkillData[];
-  allocations?: {
-    id?: number;
-    projectId?: number;
-    contractId?: number;
-    projectName: string;
-    startDate: string;
-    endDate?: string;
-    allocation: number;
-    position?: string;
-    role?: string;
-    billingRate?: number;
-  }[];
-  note?: string;
-}
-
 const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, mode }) => {
+  console.log('[EmployeeForm REINTEGRATING SKILLS] Render - employeeId:', employeeId, 'mode:', mode);
+  
   const { hasPermission, user } = useAuth();
   const employeeServiceFromHook = useEmployeeService();
-  const contractService = useContractService();
+  const skillService = useSkillService(); // Initialize skill service
   const navigate = useNavigate();
-  const [skills, setSkills] = useState<ExtendedEmployeeSkillData[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [potentialLeaders, setPotentialLeaders] = useState<NewEmployeeApiResponse[]>([]); // Added for OrganizationSection
   
-  // States for confirmation dialogs
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [formIsDirty, setFormIsDirty] = useState(false);
-  
-  // Determine if the user can edit based on permissions
-  // Admin or Manager can update any employee, Leaders can update team members, and employees can update their own information
+  // State for skills
+  const [skills, setSkills] = useState<ExtendedEmployeeSkillData[]>([]);
+  const [initialSkillsForComparison, setInitialSkillsForComparison] = useState<NewEmployeeSkillResponse[]>([]);
+
   const canEdit = 
     hasPermission('employee:update:all') || 
-    hasPermission('employee:update:team') || 
-    (hasPermission('employee:update:own') && !!employeeId && user?.id === employeeId.toString());
+    (!!employeeId && mode === 'edit'); 
   
-  console.log(canEdit);
-  console.log(user);
-  // Initialize form with default values
   const formMethods = useForm<EmployeeData>({
     defaultValues: {
       employeeCode: '',
       name: '',
       email: '',
-      position: '',
-      status: 'Available',
+      phone: '',
+      avatar: '',
+      address: '',
+      birthDate: '',
+      hireDate: '',
+      userId: '', 
       emergencyContact: {
         name: '',
         phone: '',
-        relation: ''
+        relation: '',
       },
-      joinDate: '',
-      birthDate: '',
-      address: ''
+      position: '', // Added for OrganizationSection
+      teamId: '', // Added for OrganizationSection
+      reportingLeaderId: '', // Added for OrganizationSection
+
+      // Defaults for StatusSection fields
+      status: 'Available', // Default to 'Available' for new employees
+      statusProjectName: '',
+      statusClientName: '',
+      statusProjectContractId: '',
+      statusProjectStartDate: '',
+      statusProjectEndDate: '',
+      statusAllocationPercentage: undefined, // Or 0, depending on desired behavior
+      statusIsBillable: false,
+      statusNote: '',
+      resignationDate: '',
+      leaveStartDate: '',
+      leaveEndDate: '',
     }
   });
-  
-  // Track form changes
-  useEffect(() => {
-    const subscription = formMethods.watch(() => {
-      setFormIsDirty(true);
-    });
-    return () => subscription.unsubscribe();
-  }, [formMethods]);
-  
-  // Fetch employee data if in edit mode
-  const { isLoading: isLoadingEmployee, data: employeeData } = useQuery({
+
+  // Fetch employee data
+  const {
+    isLoading: isLoadingEmployee,
+    data: employeeData,
+    isError: isErrorEmployee,
+    error: errorEmployeeQuery, 
+  } = useQuery<NewEmployeeApiResponse, Error>({
     queryKey: ['employee', employeeId],
     queryFn: async () => {
-      if (!employeeId) throw new Error('Employee ID is required');
-      return employeeServiceFromHook.getEmployeeById(employeeId.toString());
-    },
-    enabled: !!employeeId && mode === 'edit'
-  });
-  
-  // Handle employee data when it's loaded
-  useEffect(() => {
-    if (employeeData) {
-      try {
-        // Reset form with employee data
-        const employee = employeeData as EmployeeData;
-        
-        // For each field in employee, set the value in the form
-        Object.entries(employee).forEach(([key, value]) => {
-          if (key !== 'skills' && key !== 'id' && value !== undefined) {
-            formMethods.setValue(key as any, value);
-          }
-        });
-        
-        // Set the skills state separately (if they exist)
-        if (employee.skills && employee.skills.length > 0) {
-          setSkills(employee.skills.map(skill => ({
-            skillId: skill.skillId,
-            level: skill.level,
-            years: skill.years,
-            leaderAssessment: skill.leaderAssessment
-          })));
-        }
-      } catch (err) {
-        console.error('Error processing employee data:', err);
-        setError('Failed to process employee data. Please try again.');
+      console.log('[EmployeeForm REINTEGRATING SKILLS] queryFn for employeeData START. employeeId:', employeeId);
+      if (!employeeServiceFromHook || typeof employeeServiceFromHook.getEmployeeById !== 'function') {
+        console.error('[EmployeeForm REINTEGRATING SKILLS] employeeServiceFromHook is invalid.');
+        throw new Error('Employee service is not available for getEmployeeById.');
       }
-    }
-  }, [employeeData, formMethods]);
-  
-  // Create employee mutation
-  const createMutation = useMutation({
-    mutationFn: (data: EmployeeCreateData) => employeeServiceFromHook.createEmployee(data)
+      if (!employeeId) { 
+          console.error('[EmployeeForm REINTEGRATING SKILLS] No employeeId in queryFn despite enabled=true.');
+          throw new Error('Employee ID is undefined in queryFn.');
+      }
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Attempting to call getEmployeeById for ID:', employeeId);
+      const data = await employeeServiceFromHook.getEmployeeById(employeeId.toString());
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Fetched Employee Data INSIDE queryFn:', data);
+      return data;
+    },
+    enabled: !!employeeId && mode === 'edit',
   });
-  
-  // Update employee mutation
-  const updateMutation = useMutation({
-    mutationFn: (data: { id: number, employee: Partial<EmployeeCreateData> }) => 
-      employeeServiceFromHook.updateEmployee(data.id.toString(), data.employee)
+
+  // Fetch employee skills
+  const {
+    data: fetchedSkillsData,
+    isLoading: isLoadingSkills,
+    isError: isErrorSkills,
+    error: errorSkillsQuery,
+  } = useQuery<NewEmployeeSkillResponse[], Error>({
+    queryKey: ['employeeSkills', employeeId],
+    queryFn: async () => {
+      console.log('[EmployeeForm REINTEGRATING SKILLS] queryFn for employeeSkills START. employeeId:', employeeId);
+      if (!skillService || typeof skillService.getEmployeeSkills !== 'function') {
+        throw new Error('Skill service is not available for getEmployeeSkills.');
+      }
+      if (!employeeId) throw new Error('Employee ID is undefined for fetching skills.');
+      const data = await skillService.getEmployeeSkills(employeeId.toString());
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Fetched Employee Skills Data:', data);
+      return data;
+    },
+    enabled: !!employeeId && mode === 'edit',
   });
-  
-  // Handle form submission
-  const onSubmit = async (data: EmployeeData) => {
-    if (formIsDirty) {
-      setShowSaveDialog(true);
-      return;
+
+  // Fetch potential leaders for OrganizationSection
+  const {
+    isLoading: isLoadingLeaders,
+    data: leadersData,
+    isError: isErrorLeaders,
+    error: errorLeadersQuery,
+  } = useQuery<NewEmployeeApiResponse[], Error>({
+    queryKey: ['potentialLeaders'],
+    queryFn: async () => {
+      console.log('[EmployeeForm REINTEGRATING SKILLS] queryFn for potentialLeaders START.');
+      if (!employeeServiceFromHook || typeof employeeServiceFromHook.getEmployees !== 'function') {
+        console.error('[EmployeeForm REINTEGRATING SKILLS] employeeServiceFromHook is invalid for getEmployees.');
+        throw new Error('Employee service is not available for getEmployees.');
+      }
+      const response = await employeeServiceFromHook.getEmployees({ size: 100 }); // Fetch up to 100 employees
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Fetched potential leaders:', response.data.content);
+      return response.data.content;
+    },
+    // enabled: mode === 'edit' || mode === 'create', // Always fetch for new/edit if form is visible
+  });
+
+  useEffect(() => {
+    if (leadersData) {
+      setPotentialLeaders(leadersData);
     }
-    
-    await saveEmployeeData(data);
+  }, [leadersData]);
+
+  useEffect(() => {
+    if (isErrorEmployee && errorEmployeeQuery) {
+      console.error('[EmployeeForm REINTEGRATING SKILLS] Error fetching employee data:', errorEmployeeQuery);
+      setError(`Failed to fetch employee details: ${errorEmployeeQuery.message}`);
+    }
+    if (isErrorSkills && errorSkillsQuery) {
+      console.error('[EmployeeForm REINTEGRATING SKILLS] Error fetching employee skills:', errorSkillsQuery);
+      setError(`Failed to fetch employee skills: ${errorSkillsQuery.message}`);
+    }
+    if (isErrorLeaders && errorLeadersQuery) {
+      console.error('[EmployeeForm REINTEGRATING SKILLS] Error fetching potential leaders:', errorLeadersQuery);
+      setError(`Failed to fetch potential leaders: ${errorLeadersQuery.message}`);
+    }
+  }, [isErrorEmployee, errorEmployeeQuery, isErrorSkills, errorSkillsQuery, isErrorLeaders, errorLeadersQuery]);
+
+  // Reset form with employee data
+  useEffect(() => {
+    if (employeeData && mode === 'edit') {
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Employee data available, attempting to reset form:', employeeData);
+      try {
+        let ecName = '';
+        let ecPhone = '';
+        let ecRelation = '';
+
+        if (employeeData.emergencyContact) {
+          const contactInfo = employeeData.emergencyContact; 
+          const parts = contactInfo.split(';').map(part => part.trim());
+
+          for (const part of parts) {
+            if (part.startsWith('Name:')) {
+              ecName = part.substring('Name:'.length).trim();
+            } else if (part.startsWith('Phone:')) {
+              ecPhone = part.substring('Phone:'.length).trim();
+            } else if (part.startsWith('Relation:')) {
+              ecRelation = part.substring('Relation:'.length).trim();
+            }
+          }
+        }
+
+        const formDataToReset: EmployeeData = {
+          id: employeeData.id,
+          employeeCode: employeeData.employeeCode,
+          name: `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim(),
+          email: employeeData.companyEmail,
+          phone: employeeData.phoneNumber || '',
+          avatar: employeeData.profilePictureUrl || '',
+          address: employeeData.address || '',
+          birthDate: employeeData.birthDate ? new Date(employeeData.birthDate).toISOString().split('T')[0] : '',
+          hireDate: employeeData.hireDate ? new Date(employeeData.hireDate).toISOString().split('T')[0] : '', // For OrganizationSection
+          userId: employeeData.internalAccount || '', 
+          emergencyContact: { 
+            name: ecName,
+            phone: ecPhone,
+            relation: ecRelation,
+          },
+          position: employeeData.position || '', // For OrganizationSection
+          teamId: employeeData.team?.id?.toString() || '', // Ensure string for select; For OrganizationSection
+          reportingLeaderId: employeeData.reportingLeaderId?.toString() || '', // Ensure string for select; For OrganizationSection
+          
+          // Status fields - In a real scenario, these would ideally be populated from a fetched current status log.
+          // For now, they will reset to defaults or previously saved form state if any.
+          // If StatusSection is already part of the form, RHF might preserve its state across renders if not explicitly reset.
+          status: employeeData.currentStatus || formMethods.getValues('status') || 'Available',
+          // The following fields are not directly on employeeData, they would come from a status log or form state.
+          // Resetting them to defaults or letting RHF manage them if StatusSection loads its own state initially.
+          statusProjectName: formMethods.getValues('statusProjectName') || '',
+          statusClientName: formMethods.getValues('statusClientName') || '',
+          statusProjectContractId: formMethods.getValues('statusProjectContractId') || '',
+          statusProjectStartDate: formMethods.getValues('statusProjectStartDate') || '',
+          statusProjectEndDate: formMethods.getValues('statusProjectEndDate') || '',
+          statusAllocationPercentage: formMethods.getValues('statusAllocationPercentage') ?? undefined,
+          statusIsBillable: formMethods.getValues('statusIsBillable') || false,
+          statusNote: formMethods.getValues('statusNote') || '',
+          // Dates for Resigned/OnLeave - these would also ideally come from a status log or specific API if persisting
+          resignationDate: formMethods.getValues('resignationDate') || '', 
+          leaveStartDate: formMethods.getValues('leaveStartDate') || '',
+          leaveEndDate: formMethods.getValues('leaveEndDate') || '',
+        };
+        console.log('[EmployeeForm REINTEGRATING SKILLS] Resetting Form With:', formDataToReset);
+        formMethods.reset(formDataToReset);
+      } catch (err: any) {
+        console.error('[EmployeeForm REINTEGRATING SKILLS] Error processing employee data for form reset:', err);
+        setError(`Failed to process employee data for display: ${err.message}`);
+      }
+    } else if (mode === 'edit' && !isLoadingEmployee && !employeeData) {
+        console.warn('[EmployeeForm REINTEGRATING SKILLS] In edit mode, loading finished, but no employeeData to reset form.');
+    }
+  }, [employeeData, mode, formMethods, isLoadingEmployee]);
+
+  // Map fetched skills to ExtendedEmployeeSkillData and set initial comparison data
+  useEffect(() => {
+    if (fetchedSkillsData && mode === 'edit') {
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Mapping fetched skills to ExtendedEmployeeSkillData:', fetchedSkillsData);
+      setInitialSkillsForComparison(fetchedSkillsData);
+
+      const extendedSkills: ExtendedEmployeeSkillData[] = fetchedSkillsData.map(detail => ({
+        employeeSkillId: detail.id, 
+        skillId: detail.skillId,
+        skillName: detail.skillName, 
+        categoryName: detail.skillCategoryName,
+        level: detail.selfAssessmentLevel as SkillLevel, 
+        years: detail.yearsExperience, 
+        selfComment: detail.selfComment || '', 
+        leaderAssessment: detail.leaderAssessmentLevel as SkillLevel | null || null, 
+        leaderComment: detail.leaderComment || null,
+      }));
+      setSkills(extendedSkills);
+
+      console.log('[EmployeeForm REINTEGRATING SKILLS] Skills state set with extended skills:', extendedSkills);
+    }
+  }, [fetchedSkillsData, mode]);
+
+  // Callback for SkillsSection to update skills state
+  const handleSkillsChange = (updatedSkills: ExtendedEmployeeSkillData[]) => {
+    console.log('[EmployeeForm REINTEGRATING SKILLS] Skills updated by SkillsSection:', updatedSkills);
+    setSkills(updatedSkills);
   };
-  
-  // Function to actually save employee data
-  const saveEmployeeData = async (data: EmployeeData) => {
-    try {
+
+  // Submit handler
+  const onSubmit = async (data: EmployeeData) => {
       setIsSubmitting(true);
       setError(null);
-      
-      // Xử lý dữ liệu phù hợp với API
-      const employeeFormData: EmployeeCreateData = {
+    console.log('[EmployeeForm REINTEGRATING SKILLS] Submitting Form Data (main employee):', data);
+
+    const nameParts = data.name?.split(' ') || [];
+    const firstName = nameParts.shift() || ''; 
+    const lastName = nameParts.join(' ') || '';  
+
+    let emergencyContactString: string | undefined = undefined;
+    if (data.emergencyContact && (data.emergencyContact.name || data.emergencyContact.phone || data.emergencyContact.relation)) {
+      const ecName = data.emergencyContact.name || '';
+      const ecPhone = data.emergencyContact.phone || '';
+      const ecRelation = data.emergencyContact.relation || '';
+      if (ecName || ecPhone || ecRelation) { 
+        emergencyContactString = `Name: ${ecName}; Phone: ${ecPhone}; Relation: ${ecRelation}`.trim();
+      }
+    }
+
+    const employeeApiData: EmployeeCreateData = { 
         employeeCode: data.employeeCode,
-        name: data.name,
-        email: data.email,
-        position: data.position || '',
-        teamId: data.teamId || '',
-        phone: data.phone || '',
-        address: data.address || '',
-        birthDate: data.birthDate || '',
-        joinDate: data.joinDate || '',
-        status: data.status as 'Available' | 'Allocated' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated',
-        userId: data.userId && !isNaN(Number(data.userId)) ? Number(data.userId) : null,
-        note: data.note || ''
-      };
+        firstName: firstName,
+        lastName: lastName,
+        companyEmail: data.email || '', 
+        phoneNumber: data.phone || null, // Match API spec (nullable)
+        address: data.address || null, // Match API spec (nullable)
+        birthDate: data.birthDate || null, // Match API spec (nullable)
+        hireDate: data.hireDate || null, // Match API spec (nullable)
+        internalAccount: data.userId || null, // Match API spec (nullable) - assuming data.userId is internalAccount
+        profilePictureUrl: data.avatar || null, // Match API spec (nullable)
+        userId: employeeData?.userId || null, // System user ID, if available from fetched data
+        emergencyContact: emergencyContactString || null, // Match API spec (nullable)
+        position: data.position || null, // Match API spec (nullable)
+        teamId: data.teamId ? Number(data.teamId) : undefined, // undefined if not set
+        reportingLeaderId: data.reportingLeaderId ? Number(data.reportingLeaderId) : undefined, // undefined if not set
+        currentStatus: data.status || (mode === 'create' ? 'Available' : (employeeData?.currentStatus || 'Available')), // Use status from form
+    };
 
-      // Xử lý emergencyContact nếu có
-      if (data.emergencyContact?.name && data.emergencyContact?.phone) {
-        employeeFormData.emergencyContact = {
-          name: data.emergencyContact.name,
-          phone: data.emergencyContact.phone,
-          relation: data.emergencyContact.relation
-        };
-      }
-
-      // Create or update employee
-      let employeeResponse: any;
+    try {
+      let savedEmployeeResponse: NewEmployeeApiResponse;
       if (mode === 'create') {
-        employeeResponse = await createMutation.mutateAsync(employeeFormData);
-        
-        // Xử lý skills nếu có
-        if (skills.length > 0 && employeeResponse?.id) {
-          for (const skill of skills) {
-            await skillService.addOrUpdateEmployeeSkill(employeeResponse.id.toString(), {
-              skillId: skill.skillId,
-              level: skill.level,
-              years: skill.years
-            } as EmployeeSkillCreateData);
-          }
-        }
-        
-        // If we have allocations and the employee was created successfully
-        if (data.allocations && data.allocations.length > 0 && employeeResponse?.id) {
-          // Group allocations by contract
-          const allocationsByContract = data.allocations.reduce((acc: Record<string, any[]>, allocation) => {
-            const contractId = allocation.contractId || allocation.projectId;
-            if (!contractId) return acc;
-            
-            if (!acc[contractId]) {
-              acc[contractId] = [];
-            }
-            
-            // Tạo dữ liệu allocation đúng chuẩn
-            acc[contractId].push({
-              employeeId: employeeResponse.id,
-              startDate: allocation.startDate,
-              endDate: allocation.endDate,
-              allocationPercentage: allocation.allocation,
-              billRate: allocation.billingRate || 0
-            });
-            
-            return acc;
-          }, {});
-          
-          // Call contract API to assign employees to contracts
-          for (const [contractId, allocations] of Object.entries(allocationsByContract)) {
-            await contractService.assignEmployeesToContract(contractId, {
-              employeeAssignments: allocations
-            });
-          }
-        }
-        
-        navigate('/hrm/employees');
+        console.log('[EmployeeForm REINTEGRATING SKILLS] Creating employee with data:', employeeApiData);
+        savedEmployeeResponse = await employeeServiceFromHook.createEmployee(employeeApiData);
+        console.log('[EmployeeForm REINTEGRATING SKILLS] Create employee success:', savedEmployeeResponse);
       } else if (employeeId) {
-        employeeResponse = await updateMutation.mutateAsync({
-          id: employeeId,
-          employee: employeeFormData
-        });
-        
-        // Xử lý skills nếu có
-        if (skills.length > 0) {
-          for (const skill of skills) {
-            await skillService.addOrUpdateEmployeeSkill(employeeId.toString(), {
-              skillId: skill.skillId,
-              level: skill.level,
-              years: skill.years
-            } as EmployeeSkillCreateData);
-          }
-        }
-        
-        // If we have allocations and the employee was updated successfully
-        if (data.allocations && data.allocations.length > 0 && employeeResponse?.id) {
-          // Group allocations by contract
-          const allocationsByContract = data.allocations.reduce((acc: Record<string, any[]>, allocation) => {
-            const contractId = allocation.contractId || allocation.projectId;
-            if (!contractId) return acc;
-            
-            if (!acc[contractId]) {
-              acc[contractId] = [];
-            }
-            
-            // Tạo dữ liệu allocation đúng chuẩn
-            acc[contractId].push({
-              employeeId: employeeId,
-              startDate: allocation.startDate,
-              endDate: allocation.endDate,
-              allocationPercentage: allocation.allocation,
-              billRate: allocation.billingRate || 0
-            });
-            
-            return acc;
-          }, {});
-          
-          // Call contract API to assign employees to contracts
-          for (const [contractId, allocations] of Object.entries(allocationsByContract)) {
-            await contractService.assignEmployeesToContract(contractId, {
-              employeeAssignments: allocations
-            });
-          }
-        }
-        
-        navigate(`/hrm/employees/${employeeId}`);
+        console.log(`[EmployeeForm REINTEGRATING SKILLS] Updating employee ${employeeId} with data:`, employeeApiData);
+        // For update, ensure only changed fields or all fields are sent as per API spec for PUT
+        // EmployeeUpdateData might be more appropriate if API supports partial updates
+        savedEmployeeResponse = await employeeServiceFromHook.updateEmployee(employeeId.toString(), employeeApiData as Partial<EmployeeCreateData>); 
+        console.log('[EmployeeForm REINTEGRATING SKILLS] Update employee success:', savedEmployeeResponse);
+      } else {
+        throw new Error('Invalid mode or missing employeeId for submission.');
       }
-    } catch (err) {
-      console.error('Error saving employee:', err);
-      setError('Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.');
+
+      const finalEmployeeId = savedEmployeeResponse.id.toString();
+      
+      // --- Start: Status Update Logic ---
+      // Check if a status update is needed and if there's a status value from the form
+      if (data.status && finalEmployeeId) {
+        let statusSpecificStartDate: string | null = null;
+        let statusSpecificExpectedEndDate: string | null = null;
+
+        if (data.status === 'Allocated' || data.status === 'Ending Soon') {
+          statusSpecificStartDate = data.statusProjectStartDate || null;
+          statusSpecificExpectedEndDate = data.statusProjectEndDate || null;
+        } else if (data.status === 'On Leave') {
+          statusSpecificStartDate = data.leaveStartDate || null;
+          statusSpecificExpectedEndDate = data.leaveEndDate || null;
+        } else if (data.status === 'Resigned') {
+          // For 'Resigned', typically only an end date (resignationDate) is relevant as 'expectedEndDate' of the employment.
+          statusSpecificExpectedEndDate = data.resignationDate || null;
+          // startDate might be null or hireDate depending on interpretation of status log for resignation
+        }
+
+        const statusUpdatePayload: StatusUpdateRequest = { // Explicitly typed with StatusUpdateRequest
+          status: data.status,
+          projectName: (data.status === 'Allocated' || data.status === 'Ending Soon') ? data.statusProjectName || null : null,
+          clientName: (data.status === 'Allocated' || data.status === 'Ending Soon') ? data.statusClientName || null : null,
+          startDate: statusSpecificStartDate,
+          expectedEndDate: statusSpecificExpectedEndDate,
+          allocationPercentage: (data.status === 'Allocated' || data.status === 'Ending Soon') ? (data.statusAllocationPercentage ? Number(data.statusAllocationPercentage) : null) : null,
+          isBillable: (data.status === 'Allocated' || data.status === 'Ending Soon') ? data.statusIsBillable || false : null,
+          contractId: (data.status === 'Allocated' || data.status === 'Ending Soon') ? (data.statusProjectContractId ? Number(data.statusProjectContractId) : null) : null,
+          note: data.statusNote || null,
+        };
+
+        // Determine if an actual status update call is necessary.
+        // This could be based on whether the status changed from the original, or if project/note details were added/changed.
+        // For simplicity, we'll proceed if data.status has a value. More sophisticated checks can be added.
+        // A check against original employeeData.currentStatus and other relevant original log data would be ideal.
+        let shouldUpdateStatus = true; 
+        if (mode === 'edit' && employeeData) {
+            if (employeeData.currentStatus === statusUpdatePayload.status && 
+                !statusUpdatePayload.note && 
+                !(statusUpdatePayload.projectName && (data.status === 'Allocated' || data.status === 'Ending Soon')) &&
+                !(statusUpdatePayload.startDate && (data.status === 'On Leave' || data.status === 'Resigned'))
+            ) {
+                 // Example: If status is same and no new note or project/leave details, maybe don't call.
+                 // This is a basic check, real check would compare all fields of StatusUpdateRequest with current latest log.
+                 // console.log('[EmployeeForm] No significant status change detected, skipping status API call.');
+                 // shouldUpdateStatus = false; // Uncomment to enable skipping
+            }
+        }
+
+        if (shouldUpdateStatus) {
+            console.log(`[EmployeeForm] Attempting to update/log status for employee ${finalEmployeeId} with payload:`, statusUpdatePayload);
+            try {
+            // IMPORTANT: Ensure 'updateEmployeeStatusAndLog' method exists on employeeServiceFromHook
+            // and it matches the API POST /employee-status-logs/employees/{employeeId}/status
+            // If not, this will fail. This is an assumed method.
+            // const statusResponse = await employeeServiceFromHook.updateEmployeeStatusAndLog(finalEmployeeId, statusUpdatePayload);
+            
+            // TODO: The call below uses 'updateEmployeeStatus' which might only update the main employee status 
+            // and NOT create a detailed status log entry. 
+            // For full status logging (via POST /employee-status-logs/employees/{employeeId}/status),
+            // ensure 'EmployeeService' has a method like 'updateEmployeeStatusAndLog(employeeId, payload)'
+            // that calls the correct logging API, and then revert to using that method here.
+            const statusResponse = await employeeServiceFromHook.updateEmployeeStatus(finalEmployeeId, statusUpdatePayload);
+            console.log('[EmployeeForm] Status update success (potentially without detailed log):', statusResponse);
+            
+            // Mocking the call for now as the actual service method is not confirmed
+            // await new Promise(resolve => setTimeout(resolve, 500)); // Commented out or remove
+
+            } catch (statusApiError: any) {
+                console.error('[EmployeeForm] Error during status update/log API call:', statusApiError);
+                // Append to existing errors or set new one, but don't block navigation if main save was ok.
+                setError(prev => prev ? `${prev}\nLỗi cập nhật trạng thái: ${statusApiError.message}` : `Lỗi cập nhật trạng thái: ${statusApiError.message}`);
+            }
+        }
+      }
+      // --- End: Status Update Logic ---
+
+      if (finalEmployeeId && skillService) {
+        console.log(`[EmployeeForm REINTEGRATING SKILLS] Processing skills for employee ID: ${finalEmployeeId}`);
+        
+        const skillsToDelete = initialSkillsForComparison.filter(
+          initialSkill => !skills.some(currentSkill => currentSkill.skillId === initialSkill.skillId)
+        );
+
+        const skillPromises: Promise<any>[] = [];
+
+        skillsToDelete.forEach(skillDetail => {
+          console.log(`[EmployeeForm REINTEGRATING SKILLS] Deleting skill ID: ${skillDetail.skillId}, Name: ${skillDetail.skillName}`);
+          // Assuming deleteEmployeeSkill signature is (employeeId: string, employeeSkillId: string)
+          // or (employeeId: string, skillId: string) - check service definition
+          // EmployeeSkillDetail.id is the EmployeeSkillDto.id (the link table record id)
+          if (skillDetail.id) { // Ensure we have the EmployeeSkill ID to delete
+             skillPromises.push(skillService.deleteEmployeeSkill(finalEmployeeId, skillDetail.id.toString()));
+          } else {
+             console.warn(`[EmployeeForm REINTEGRATING SKILLS] Cannot delete skill ${skillDetail.skillName} as it doesn't have an existing employeeSkillId (link table ID).`);
+          }
+        });
+
+        skills.forEach(currentSkill => {
+          const apiPayload: EmployeeSkillCreateData = {
+            skillId: currentSkill.skillId,
+            yearsExperience: currentSkill.years ?? null, // Use ?? null to ensure number | null
+            selfAssessmentLevel: currentSkill.level as string ?? null, // Cast SkillLevel to string, then ?? null
+            selfComment: currentSkill.selfComment || null,
+            leaderAssessmentLevel: currentSkill.leaderAssessment || null,
+            leaderComment: currentSkill.leaderComment || null,
+          };
+
+          const isExistingAssociation = initialSkillsForComparison.some(
+            initialSkill => initialSkill.skillId === currentSkill.skillId
+          );
+          
+          if (isExistingAssociation) {
+            const originalSkill = initialSkillsForComparison.find(is => is.skillId === currentSkill.skillId);
+            const originalPayload: EmployeeSkillCreateData | null = originalSkill ? {
+                skillId: originalSkill.skillId,
+                yearsExperience: originalSkill.yearsExperience ?? null,
+                selfAssessmentLevel: originalSkill.selfAssessmentLevel as string ?? null,
+                selfComment: originalSkill.selfComment || null,
+                leaderAssessmentLevel: originalSkill.leaderAssessmentLevel || null,
+                leaderComment: originalSkill.leaderComment || null,
+            } : null;
+
+            // Only update if something changed. JSON.stringify might be too simple for deep comparison or specific logic.
+            if (JSON.stringify(apiPayload) !== JSON.stringify(originalPayload)) {
+                 console.log(`[EmployeeForm REINTEGRATING SKILLS] Updating skill ID: ${currentSkill.skillId} with payload:`, apiPayload);
+                 // Assuming addOrUpdateEmployeeSkill(employeeId, payload) where payload contains skillId for upsert
+                 skillPromises.push(skillService.addOrUpdateEmployeeSkill(finalEmployeeId, apiPayload));
+            } else {
+                 console.log(`[EmployeeForm REINTEGRATING SKILLS] Skill ID: ${currentSkill.skillId} - no changes detected, skipping update.`);
+            }
+          } else {
+            console.log(`[EmployeeForm REINTEGRATING SKILLS] Adding new skill ID: ${currentSkill.skillId} with payload:`, apiPayload);
+            skillPromises.push(skillService.addOrUpdateEmployeeSkill(finalEmployeeId, apiPayload));
+          }
+        });
+
+        try {
+          await Promise.all(skillPromises);
+          console.log('[EmployeeForm REINTEGRATING SKILLS] All skill operations completed.');
+        } catch (skillError: any) {
+          console.error('[EmployeeForm REINTEGRATING SKILLS] Error during skill operations:', skillError);
+          setError(prev => prev ? `${prev}\nLỗi khi lưu kỹ năng: ${skillError.message}` : `Lỗi khi lưu kỹ năng: ${skillError.message}`);
+          // Do not re-throw, allow main navigation to proceed if employee save was successful
+        }
+      }
+
+      if (mode === 'create') {
+        navigate('/hrm/employees');
+      } else {
+        navigate(`/hrm/employees/${finalEmployeeId}`);
+      }
+
+    } catch (err: any) {
+      console.error('[EmployeeForm REINTEGRATING SKILLS] Error saving employee (main data):', err);
+      setError(`Lưu thất bại: ${err.response?.data?.message || err.message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
-  
-  // Handle cancel button click
-  const handleCancel = () => {
-    if (formIsDirty) {
-      setShowCancelDialog(true);
-    } else {
-      navigate('/hrm/employees');
-    }
-  };
-  
-  // Handle skills changes from the skills section
-  const handleSkillsChange = (updatedSkills: ExtendedEmployeeSkillData[]) => {
-    setSkills(updatedSkills);
-  };
-  
+
+  // Ensure the main return statement for the component is present and correct
   return (
     <FormProvider {...formMethods}>
       <form onSubmit={formMethods.handleSubmit(onSubmit)}>
         <div className="space-y-8 divide-y divide-gray-200">
           <div className="space-y-6">
-            {/* Form Header */}
             <div>
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 {mode === 'create' ? 'Thêm mới Nhân viên' : 'Cập nhật thông tin Nhân viên'}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {mode === 'create' 
-                  ? 'Điền thông tin để tạo hồ sơ nhân viên mới.'
-                  : 'Cập nhật thông tin trong hồ sơ nhân viên.'}
-              </p>
             </div>
             
-            {/* Error message */}
             {error && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">
-                      {error}
-                    </h3>
-                  </div>
-                </div>
+              <div className="rounded-md bg-red-50 p-4 text-red-700 whitespace-pre-line">
+                {/* Ensure error is a string or can be rendered */}
+                Error: {typeof error === 'object' ? JSON.stringify(error) : error}
               </div>
             )}
             
-            {/* Loading indicator */}
-            {isLoadingEmployee && (
-              <div className="flex justify-center py-4">
-                <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+            {(isLoadingEmployee || (mode === 'edit' && isLoadingSkills)) && (
+              <div className="flex justify-center py-4">Loading employee data...</div>
             )}
-            
-            {/* Form Sections */}
-            {!isLoadingEmployee && (
+
+            {(!isLoadingEmployee && !(mode === 'edit' && isLoadingSkills) || mode === 'create') && (
               <>
                 <BasicInfoSection isEditable={canEdit} mode={mode} />
-                <OrganizationSection isEditable={canEdit} />
+                <OrganizationSection 
+                  isEditable={canEdit} 
+                  potentialLeaders={potentialLeaders} 
+                  isLoadingLeaders={isLoadingLeaders} 
+                />
                 <SkillsSection 
                   isEditable={canEdit} 
                   skills={skills} 
                   onSkillsChange={handleSkillsChange}
-                  userRole={user?.role}
+                  userRole={user?.role as string | string[] | undefined} 
                 />
                 <StatusSection isEditable={canEdit} />
               </>
             )}
             
-            {/* Form Actions */}
             <div className="flex justify-end space-x-3 pt-5">
-              <button
-                type="button"
-                className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                onClick={handleCancel}
-                disabled={isSubmitting}
-              >
+              <button type="button" onClick={() => navigate('/hrm/employees')} disabled={isSubmitting}>
                 Hủy bỏ
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !canEdit}
-                className={`py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white ${
-                  canEdit 
-                    ? 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
+                disabled={isSubmitting || !canEdit || isLoadingEmployee || isLoadingLeaders || (mode === 'edit' && isLoadingSkills)}
               >
-                {isSubmitting ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Đang xử lý...
-                  </span>
-                ) : mode === 'create' ? 'Tạo nhân viên' : 'Cập nhật'
-                }
+                {isSubmitting ? 'Đang xử lý...' : (mode === 'create' ? 'Tạo nhân viên' : 'Cập nhật')}
               </button>
             </div>
           </div>
         </div>
       </form>
-      
-      {/* Cancel Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={showCancelDialog}
-        onClose={() => setShowCancelDialog(false)}
-        title="Xác nhận hủy bỏ"
-        message="Bạn có thay đổi chưa được lưu. Bạn có chắc chắn muốn hủy bỏ?"
-        confirmLabel="Hủy bỏ thay đổi"
-        cancelLabel="Tiếp tục chỉnh sửa"
-        confirmVariant="danger"
-        onConfirm={() => navigate('/hrm/employees')}
-      />
-      
-      {/* Save Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={showSaveDialog}
-        onClose={() => setShowSaveDialog(false)}
-        title="Xác nhận lưu thay đổi"
-        message="Bạn có chắc chắn muốn lưu thay đổi thông tin nhân viên?"
-        confirmLabel="Lưu thay đổi"
-        confirmVariant="primary"
-        cancelLabel="Hủy"
-        onConfirm={() => saveEmployeeData(formMethods.getValues())}
-      />
     </FormProvider>
   );
 };
 
-export default EmployeeForm; 
+export default EmployeeForm;

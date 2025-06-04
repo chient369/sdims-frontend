@@ -53,7 +53,7 @@ const EmployeeList: React.FC = () => {
   const [isColumnTogglerOpen, setIsColumnTogglerOpen] = useState(false);
   
   // State for employee data
-  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+  const [employees, setEmployees] = useState<NewEmployeeApiResponse[]>([]);
   
   // State for filter options
   const [teams, setTeams] = useState<TeamInfo[]>([]);
@@ -82,7 +82,7 @@ const EmployeeList: React.FC = () => {
   
   // Use the extended type for filters
   const [extendedFilters, setExtendedFilters] = useState<ExtendedFilters>({
-    teamId: '',
+    teamId: undefined,
     status: undefined,
     skillIds: [],
     position: '',
@@ -229,9 +229,9 @@ const EmployeeList: React.FC = () => {
       // Extract valid filters for the API
       const apiFilters: Partial<EmployeeListParams> = {
         page: pagination.page,
-        limit: pagination.limit,
+        size: pagination.limit,
         keyword: search || undefined,
-        teamId: extendedFilters.teamId || undefined,
+        teamId: extendedFilters.teamId ? Number(extendedFilters.teamId) : undefined,
         status: extendedFilters.status,
         skillIds: extendedFilters.skillIds?.length ? extendedFilters.skillIds.map(Number) : undefined,
         position: extendedFilters.position || undefined,
@@ -242,54 +242,38 @@ const EmployeeList: React.FC = () => {
       // Filter by team if user is a team leader
       if (user?.role === 'Leader' && !hasPermission('employee:read:all')) {
         // User can only see their team members
-        apiFilters.teamId = user.teamId;
+        apiFilters.teamId = user.teamId ? Number(user.teamId) : undefined;
       }
       
       const response = await employeeService.getEmployees(apiFilters);
       
-      // Kiểm tra xem dữ liệu có cấu trúc mới hay không
+      // Check if the data has the new structure
       if (response && 'data' in response && response.data && Array.isArray(response.data.content)) {
-        // Đây là cấu trúc mới
-        // Chuyển đổi cấu trúc data mới sang cấu trúc hiển thị
-        const convertedEmployees = response.data.content.map((emp: any) => {
-          // Ánh xạ từ cấu trúc API mới sang cấu trúc hiển thị
-          return {
-            id: emp.id,
-            employeeCode: emp.employeeCode,
-            name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
-            email: emp.companyEmail || '',
-            position: emp.position || '',
-            phone: emp.phoneNumber || '',
-            address: emp.address || '',
-            team: emp.team,
-            status: convertStatus(emp.currentStatus),
-            avatarUrl: emp.profilePictureUrl,
-            hireDate: emp.hireDate || '',
-            // Các trường bắt buộc trong EmployeeResponse
-            utilization: 0
-          } as EmployeeResponse;
-        });
+        // This is the new structure, use it directly
+        setEmployees(response.data.content);
         
-        setEmployees(convertedEmployees);
-      setPagination(prev => ({
-        ...prev,
+        setPagination(prev => ({
+          ...prev,
           total: response.data.pageable.totalElements || 0,
           totalPages: response.data.pageable.totalPages || 0
-      }));
+        }));
       } else {
-        // Xử lý cấu trúc dữ liệu khác nếu có
+        // Handle other data structures if necessary or error
+        // For now, let's assume the old structure might appear if not fully migrated
         const data = response as any;
         if (data && Array.isArray(data.content)) {
-          setEmployees(data.content);
+          // If it's an old structure expecting EmployeeResponse[], it might lead to type issues here
+          // This block might need removal if PaginatedEmployeeResponse is strictly enforced everywhere
+          console.warn('Received data in an unexpected paginated format, attempting to adapt.');
+          setEmployees(data.content); // This could be problematic if data.content is not NewEmployeeApiResponse[]
           setPagination(prev => ({
             ...prev,
             total: data.pageable?.totalElements || 0,
             totalPages: data.pageable?.totalPages || 0
           }));
         } else {
-          // Không có dữ liệu hoặc cấu trúc không xác định
           setEmployees([]);
-          setError('Định dạng dữ liệu không đúng. Vui lòng liên hệ quản trị viên.');
+          setError('Định dạng dữ liệu nhân viên không đúng. Vui lòng liên hệ quản trị viên.');
         }
       }
     } catch (error) {
@@ -329,7 +313,7 @@ const EmployeeList: React.FC = () => {
   const handleClearFilters = () => {
     setSearch('');
     setExtendedFilters({
-      teamId: '',
+      teamId: undefined,
       status: undefined,
       skillIds: [],
       position: '',
@@ -438,31 +422,30 @@ const EmployeeList: React.FC = () => {
     {
       id: 'employee',
       header: 'Nhân viên',
-      accessorKey: 'name',
       cell: ({ row }: any) => {
-        const employee = row.original;
+        const employee = row.original as NewEmployeeApiResponse;
         return (
           <div className="flex items-center space-x-3">
-            {employee.avatarUrl ? (
+            {employee.profilePictureUrl ? (
               <img
-                src={employee.avatarUrl}
-                alt={employee.name}
+                src={employee.profilePictureUrl}
+                alt={`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}
                 className="w-10 h-10 rounded-full object-cover"
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-800 font-medium">
-                {employee.name.charAt(0)}
+                {(employee.firstName || '?').charAt(0)}
               </div>
             )}
             <div>
               <div className="font-medium text-secondary-900">
-                {employee.name}
+                {`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}
               </div>
               <div className="text-sm text-secondary-500">
                 {employee.employeeCode || 'N/A'}
               </div>
               <div className="text-xs text-secondary-400">
-                {employee.email}
+                {employee.companyEmail || 'N/A'}
               </div>
             </div>
           </div>
@@ -478,113 +461,31 @@ const EmployeeList: React.FC = () => {
     {
       id: 'team',
       header: 'Team/Bộ phận',
-      accessorFn: (row: EmployeeResponse) => row.team?.name,
+      accessorFn: (row: NewEmployeeApiResponse) => row.team?.name,
       cell: ({ row }: any) => row.original.team?.name || 'Chưa phân công'
     },
     {
       id: 'status',
       header: 'Trạng thái',
-      accessorKey: 'status',
-      cell: ({ getValue, row }: any) => {
-        const status = getValue();
-        const employee = row.original;
-        const statusDisplay = getStatusBadge(status);
-        
-        // Add end date for "EndingSoon" status
-        if (status === 'EndingSoon' && employee.projectEndDate) {
-          return (
-            <Tooltip 
-              content={`Dự kiến kết thúc: ${new Date(employee.projectEndDate).toLocaleDateString('vi-VN')}`}
-            >
-              {statusDisplay}
-            </Tooltip>
-          );
-        }
-        
+      accessorKey: 'currentStatus',
+      cell: ({ getValue }: any) => {
+        const status = getValue() as string;
+        const statusDisplay = getStatusBadge(convertStatus(status));
         return statusDisplay;
       }
     },
     {
       id: 'skills',
       header: 'Skills chính',
-      accessorFn: (row: EmployeeResponse) => row.skills,
-      cell: ({ getValue, row }: any) => {
-        const skills = getValue() || [];
-        
-        // If no skills
-        if (!skills.length) return <span className="text-gray-400 text-sm">Chưa có skills</span>;
-        
-        // Display max 3 skills with all skills in tooltip
-        const displaySkills = skills.slice(0, 3);
-        const hasMoreSkills = skills.length > 3;
-        
-        return (
-          <div className="flex flex-wrap gap-1">
-            {displaySkills.map((skill: any, index: number) => (
-              <Badge key={index} color="info" className="text-xs">{skill.name}</Badge>
-            ))}
-            
-            {hasMoreSkills && (
-              <Tooltip 
-                content={
-                  <div className="max-w-xs">
-                    <div className="font-medium mb-1">Tất cả skills:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {skills.map((skill: any, index: number) => (
-                        <Badge key={index} color="info" className="text-xs">{skill.name}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                }
-              >
-                <span className="text-primary-600 text-xs cursor-pointer">+{skills.length - 3} skills</span>
-              </Tooltip>
-            )}
-          </div>
-        );
+      cell: () => {
+        return <span className="text-gray-400 text-sm">N/A (Xem chi tiết)</span>;
       }
     },
     {
       id: 'currentProject',
       header: 'Dự án hiện tại',
-      accessorFn: (row: EmployeeResponse) => row.currentProject,
-      cell: ({ getValue, row }: any) => {
-        const project = getValue();
-        const employee = row.original;
-        
-        if (!project) {
-          if (employee.status === 'Available') {
-            return <span className="text-gray-400 text-sm">Không có dự án</span>;
-          }
-          return <span className="text-gray-400 text-sm">N/A</span>;
-        }
-        
-        // Kiểm tra xem project có phải là object hay string
-        const projectName = typeof project === 'object' ? project.name : project;
-        
-        // If we have project details
-        return (
-          <Tooltip 
-            content={
-              <div className="max-w-xs">
-                <div className="font-medium">{projectName}</div>
-                {typeof project === 'object' && (
-                  <>
-                <div className="text-sm">Khách hàng: {project.client || 'N/A'}</div>
-                <div className="text-sm">Vai trò: {employee.projectRole || 'N/A'}</div>
-                {employee.projectStartDate && (
-                  <div className="text-sm">
-                    Từ: {new Date(employee.projectStartDate).toLocaleDateString('vi-VN')}
-                  </div>
-                    )}
-                  </>
-                )}
-              </div>
-            }
-          >
-            <span className="text-secondary-700">{projectName}</span>
-          </Tooltip>
-        );
+      cell: () => {
+        return <span className="text-gray-400 text-sm">N/A (Xem chi tiết)</span>;
       }
     },
     {
@@ -592,15 +493,23 @@ const EmployeeList: React.FC = () => {
       header: 'Ngày vào công ty',
       accessorKey: 'hireDate',
       cell: ({ getValue }: any) => {
-        const date = new Date(getValue());
-        return date.toLocaleDateString('vi-VN');
+        const dateValue = getValue() as string | null;
+        if (!dateValue) return 'N/A';
+        try {
+          const date = new Date(dateValue);
+          // Check if date is valid
+          if (isNaN(date.getTime())) return 'Invalid Date';
+          return date.toLocaleDateString('vi-VN');
+        } catch (e) {
+          return 'Invalid Date';
+        }
       }
     },
     {
       id: 'actions',
       header: '',
       cell: ({ row }: any) => {
-        const employee = row.original;
+        const employee = row.original as NewEmployeeApiResponse;
         return (
           <div className="flex justify-end space-x-2">
             <Tooltip content="Xem chi tiết">
@@ -908,7 +817,10 @@ const EmployeeList: React.FC = () => {
                   <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     value={extendedFilters.teamId || ''}
-                    onChange={(e) => setExtendedFilters(prev => ({ ...prev, teamId: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setExtendedFilters(prev => ({ ...prev, teamId: value ? Number(value) : undefined }));
+                    }}
                   >
                     <option value="">Tất cả bộ phận</option>
                     {teams.map(team => (
@@ -968,13 +880,13 @@ const EmployeeList: React.FC = () => {
                   <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     multiple
-                    value={extendedFilters.skillIds as string[] || []}
+                    value={extendedFilters.skillIds?.map(id => id.toString()) || []}
                     onChange={(e) => {
                       const selectedOptions = Array.from(
                         e.target.selectedOptions,
                         option => option.value
                       );
-                      setExtendedFilters(prev => ({ ...prev, skillIds: selectedOptions }));
+                      setExtendedFilters(prev => ({ ...prev, skillIds: selectedOptions.map(value => Number(value)) }));
                     }}
                   >
                     {skillCategories && skillCategories.length > 0 ? 

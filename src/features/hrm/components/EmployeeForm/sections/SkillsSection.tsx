@@ -5,14 +5,16 @@ import { useSkillService } from '../../../hooks/useServices';
 import { ConfirmationDialog } from '../../../../../components/modals/ConfirmationDialog';
 
 interface ExtendedEmployeeSkillData {
-  skillId: number;
-  level: SkillLevel;
+  employeeSkillId?: number; // ID of the EmployeeSkillDto (link table record)
+  skillId: number;         // ID of the actual Skill (from SkillDto)
+  skillName?: string;       // For display purposes
+  categoryId?: number;      // ID of the skill category
+  categoryName?: string;    // For display purposes
+  level: SkillLevel;       // Self-assessed level
   years: number;
-  leaderAssessment?: SkillLevel;
-  skillName?: string;
-  categoryId?: number;
-  categoryName?: string;
-  id?: number;
+  selfComment?: string;     // Self-assessed comment
+  leaderAssessment?: SkillLevel | null; // Leader-assessed level, allows null
+  leaderComment?: string | null;      // Leader-assessed comment, allows null
 }
 
 interface SkillsSectionProps {
@@ -37,16 +39,42 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
   const [skillToDelete, setSkillToDelete] = useState<number | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   
-  // Determine what the user can edit based on role
-  const canAddSkills = isEditable || userRole == 'Employee';
-  const canAssessSkills = isEditable || userRole == 'Leader';
+  console.log('[SkillsSection] Props received - isEditable:', isEditable, 'userRole:', userRole);
+
+  const canEditSelfAssessment = isEditable;
+
+  let rolesArray: string[] = [];
+  if (userRole) {
+    if (Array.isArray(userRole)) {
+      rolesArray = userRole.map(r => String(r).toLowerCase());
+    } else if (typeof userRole === 'string') {
+      rolesArray = [userRole.toLowerCase()];
+    }
+  }
+  const canEditLeaderAssessment = isEditable && (rolesArray.includes('leader') || rolesArray.includes('admin'));
+  const canModifySkillList = isEditable;
+
+  console.log('[SkillsSection] Permissions calculated - canEditSelfAssessment:', canEditSelfAssessment, 'canEditLeaderAssessment:', canEditLeaderAssessment, 'canModifySkillList:', canModifySkillList);
   
   // Fetch skill categories
   const { data: categoriesData } = useQuery({
     queryKey: ['skillCategories'],
     queryFn: async () => {
-      const response = await skillService.getSkillCategories();
-      return response.content;
+      const response = await skillService.getSkillCategories(); 
+      // Log shows response is directly an array: SkillCategoryResponse[]
+      // Declared type of skillService.getSkillCategories() is Promise<{ content: SkillCategoryResponse[], pageable: ... }>
+
+      // Check if response is directly an array (actual runtime behavior from log)
+      if (Array.isArray(response)) {
+        return response;
+      } 
+      // Fallback to check for the declared structure (response.content)
+      else if (response && typeof response === 'object' && 'content' in response && Array.isArray(response.content)) {
+        return response.content;
+      }
+
+      console.warn('[SkillsSection] Skill categories data is not in a recognized format:', response);
+      return []; // Return empty array to prevent error
     }
   });
   
@@ -91,20 +119,40 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
   const handleAddSkill = () => {
     if (!selectedCategoryId || !selectedSkillId) return;
     
-    const skillToAdd = availableSkills.find(s => s.id === selectedSkillId);
+    const skillToAdd = availableSkills.find(s => s.id === selectedSkillId) as any; // Cast to any to access potential flat properties
     
     if (skillToAdd) {
+      let categoryIdToAdd: number | undefined;
+      let categoryNameToAdd: string | undefined;
+
+      // Prioritize direct properties if they exist (based on console log observations)
+      if (typeof skillToAdd.categoryId === 'number' && typeof skillToAdd.categoryName === 'string') {
+        categoryIdToAdd = skillToAdd.categoryId;
+        categoryNameToAdd = skillToAdd.categoryName;
+      } 
+      // Fallback to nested structure (as per SkillResponse type definition)
+      else if (skillToAdd.category && typeof skillToAdd.category.id === 'number' && typeof skillToAdd.category.name === 'string') {
+        categoryIdToAdd = skillToAdd.category.id;
+        categoryNameToAdd = skillToAdd.category.name;
+      }
+
+      if (categoryIdToAdd === undefined || categoryNameToAdd === undefined) {
+        console.error('[SkillsSection] Error: Skill to add does not have complete category information. Skill object from availableSkills:', JSON.stringify(skillToAdd));
+        alert('Lỗi: Skill được chọn không có đủ thông tin về danh mục. Vui lòng kiểm tra lại cấu trúc dữ liệu skill từ API.');
+        return; 
+      }
+
       const newSkill: ExtendedEmployeeSkillData = {
         skillId: skillToAdd.id,
         skillName: skillToAdd.name,
-        categoryId: skillToAdd.category.id,
-        categoryName: skillToAdd.category.name,
-        level: 'Basic',
-        years: 0
+        categoryId: categoryIdToAdd,
+        categoryName: categoryNameToAdd,
+        level: 'Basic', 
+        years: 0        
       };
       
       onSkillsChange([...skills, newSkill]);
-      setSelectedSkillId(null); // Reset selected skill after adding
+      setSelectedSkillId(null); 
     }
   };
   
@@ -153,13 +201,17 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
     skillsByCategory[categoryName].push(skill);
   });
   
+  const inputBaseClasses = "p-2 border rounded-md shadow-sm sm:text-sm";
+  const enabledInputClasses = "bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500";
+  const disabledInputClasses = "bg-gray-100 cursor-not-allowed text-gray-500";
+
   return (
-    <div className="mb-8 border border-gray-200 rounded-md overflow-hidden">
+    <div className="mb-8 border border-gray-200 rounded-md overflow-hidden shadow-sm">
       <div 
-        className="bg-gray-50 px-4 py-3 flex justify-between items-center cursor-pointer"
+        className="bg-slate-50 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors duration-150"
         onClick={() => setExpanded(!expanded)}
       >
-        <h2 className="text-lg font-medium text-gray-900">Quản lý Skills & Kinh nghiệm</h2>
+        <h2 className="text-lg font-medium text-gray-700">Quản lý Skills & Kinh nghiệm</h2>
         <button type="button" className="text-gray-400 hover:text-gray-500">
           {expanded ? (
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -175,17 +227,16 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
       
       {expanded && (
         <div className="px-4 py-5 bg-white sm:p-6">
-          {/* Add Skill */}
-          {canAddSkills && (
-            <div className="mb-6">
-              <div className="flex flex-col gap-4 md:flex-row mb-2">
+          {canModifySkillList && (
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <div className="flex flex-col gap-4 md:flex-row mb-2 items-end">
                 <div className="md:flex-1">
                   <label htmlFor="categorySelect" className="block text-sm font-medium text-gray-700 mb-1">
                     Loại Skill
                   </label>
                   <select
                     id="categorySelect"
-                    className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className={`${inputBaseClasses} w-full ${enabledInputClasses}`}
                     value={selectedCategoryId?.toString() || ''}
                     onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
                   >
@@ -197,14 +248,13 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
                     ))}
                   </select>
                 </div>
-                
                 <div className="md:flex-1">
                   <label htmlFor="skillSelect" className="block text-sm font-medium text-gray-700 mb-1">
                     Tên Skill
                   </label>
                   <select
                     id="skillSelect"
-                    className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className={`${inputBaseClasses} w-full ${enabledInputClasses}`}
                     value={selectedSkillId?.toString() || ''}
                     onChange={(e) => setSelectedSkillId(Number(e.target.value))}
                     disabled={!selectedCategoryId || getAvailableSkillsForSelection().length === 0}
@@ -217,13 +267,12 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
                     ))}
                   </select>
                 </div>
-                
                 <div className="flex items-end">
                   <button
                     type="button"
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleAddSkill}
-                    disabled={!selectedCategoryId || !selectedSkillId}
+                    disabled={!selectedCategoryId || !selectedSkillId || !canModifySkillList}
                   >
                     Thêm Skill
                   </button>
@@ -232,116 +281,102 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({
             </div>
           )}
           
-          {/* Skills List */}
           <div>
             {Object.entries(skillsByCategory).length > 0 ? (
               Object.entries(skillsByCategory).map(([category, categorySkills]) => (
                 <div key={category} className="mb-6">
-                  <h3 className="text-md font-medium text-gray-900 mb-3">{category}</h3>
-                  <table className="min-w-full divide-y divide-gray-200 border">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
-                          Tên Skill
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Số năm kinh nghiệm
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Tự đánh giá
-                        </th>
-                        {canAssessSkills && (
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Leader đánh giá
-                          </th>
-                        )}
-                        {canAddSkills && (
-                          <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                            Xóa
-                          </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {categorySkills.map((skill, index) => (
-                        <tr key={skill.skillId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-4 py-4 text-sm font-medium text-gray-900">
-                            {availableSkills.find(s => s.id === skill.skillId)?.name || skill.skillName || `Skill #${skill.skillId}`}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              min="0"
-                              max="50"
-                              className={`block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                                !canAddSkills ? 'bg-gray-100' : ''
-                              }`}
-                              value={skill.years}
-                              onChange={(e) => handleSkillChange(skill.skillId, 'years', parseInt(e.target.value) || 0)}
-                              disabled={!canAddSkills}
-                            />
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <select
-                              className={`block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                                !canAddSkills ? 'bg-gray-100' : ''
-                              }`}
-                              value={skill.level}
-                              onChange={(e) => handleSkillChange(skill.skillId, 'level', e.target.value as SkillLevel)}
-                              disabled={!canAddSkills}
-                            >
-                              <option value="Basic">Basic</option>
-                              <option value="Intermediate">Intermediate</option>
-                              <option value="Advanced">Advanced</option>
-                              <option value="Expert">Expert</option>
-                            </select>
-                          </td>
-                          {canAssessSkills && (
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <select
-                                className={`block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                                  !canAssessSkills ? 'bg-gray-100' : ''
-                                }`}
-                                value={skill.leaderAssessment || ''}
-                                onChange={(e) => handleSkillChange(skill.skillId, 'leaderAssessment', e.target.value as SkillLevel)}
-                                disabled={!canAssessSkills}
+                  <h3 className="text-base font-semibold text-gray-800 mb-3 tracking-wide pb-1 border-b border-gray-200">{category}</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Tên Skill</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">Số năm KN</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Tự đánh giá</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Bình luận cá nhân</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Leader đánh giá</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Nhận xét Leader</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {categorySkills.map(skill => (
+                          <tr key={skill.skillId} className="hover:bg-gray-50 transition-colors duration-150">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{skill.skillName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <input 
+                                type="number" min="0" step="0.5" value={skill.years}
+                                disabled={!canEditSelfAssessment} 
+                                onChange={(e) => handleSkillChange(skill.skillId, 'years', parseFloat(e.target.value))}
+                                className={`${inputBaseClasses} w-24 ${!canEditSelfAssessment ? disabledInputClasses : enabledInputClasses}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <select value={skill.level}
+                                disabled={!canEditSelfAssessment}
+                                onChange={(e) => handleSkillChange(skill.skillId, 'level', e.target.value)}
+                                className={`${inputBaseClasses} w-full ${!canEditSelfAssessment ? disabledInputClasses : enabledInputClasses}`}
                               >
-                                <option value="">Chưa đánh giá</option>
                                 <option value="Basic">Basic</option>
                                 <option value="Intermediate">Intermediate</option>
                                 <option value="Advanced">Advanced</option>
                                 <option value="Expert">Expert</option>
                               </select>
                             </td>
-                          )}
-                          {canAddSkills && (
-                            <td className="px-4 py-4 whitespace-nowrap text-center">
-                              <button
-                                type="button"
-                                className="inline-flex items-center px-2 py-1 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                                onClick={() => confirmRemoveSkill(skill.skillId)}
-                              >
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span className="ml-1">Xóa</span>
-                              </button>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <textarea value={skill.selfComment || ''}
+                                disabled={!canEditSelfAssessment}
+                                onChange={(e) => handleSkillChange(skill.skillId, 'selfComment', e.target.value)}
+                                className={`${inputBaseClasses} w-full ${!canEditSelfAssessment ? disabledInputClasses : enabledInputClasses}`}
+                                rows={2}
+                              />
                             </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <select value={skill.leaderAssessment || ''}
+                                disabled={!canEditLeaderAssessment}
+                                onChange={(e) => handleSkillChange(skill.skillId, 'leaderAssessment', e.target.value || null)}
+                                className={`${inputBaseClasses} w-full ${!canEditLeaderAssessment ? disabledInputClasses : enabledInputClasses}`}
+                              >
+                                <option value="">-- Chưa đánh giá --</option>
+                                <option value="Basic">Basic</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                                <option value="Expert">Expert</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <textarea value={skill.leaderComment || ''}
+                                disabled={!canEditLeaderAssessment}
+                                onChange={(e) => handleSkillChange(skill.skillId, 'leaderComment', e.target.value)}
+                                className={`${inputBaseClasses} w-full ${!canEditLeaderAssessment ? disabledInputClasses : enabledInputClasses}`}
+                                rows={2}
+                              />
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center text-sm font-medium">
+                              {canModifySkillList && (
+                                <button 
+                                  type="button"
+                                  onClick={() => confirmRemoveSkill(skill.skillId)} 
+                                  className="text-red-500 hover:text-red-700 font-medium p-1 rounded hover:bg-red-100 transition-colors duration-150"
+                                >
+                                  Xóa
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-gray-500">
-                Chưa có skill nào được thêm. Sử dụng nút "Thêm Skill" để bắt đầu.
+              <div className="text-center py-6 text-gray-500">
+                Chưa có skill nào được thêm. Sử dụng các trường chọn ở trên và nút "Thêm Skill" để bắt đầu.
               </div>
             )}
           </div>
           
-          {/* Delete Confirmation Dialog */}
           <ConfirmationDialog
             isOpen={showDeleteConfirmation}
             onClose={cancelRemoveSkill}

@@ -43,10 +43,15 @@ apiClient.interceptors.request.use(
 // Response interceptor
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
+    console.log('[AxiosInterceptor] Original response:', JSON.parse(JSON.stringify(response))); // Log full response
+    console.log('[AxiosInterceptor] Original response.data:', response.data);
+
     // Handle new API response structure
     if (response.data && response.data.status === "success") {
+      console.log('[AxiosInterceptor] Condition (response.data.status === "success") is TRUE. Returning response.data:', response.data);
       return response.data;
     }
+    console.log('[AxiosInterceptor] Condition (response.data.status === "success") is FALSE. Returning response.data:', response.data);
     return response.data;
   },
   (error: AxiosError) => {

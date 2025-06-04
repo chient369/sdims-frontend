@@ -14,11 +14,11 @@
  */
 export interface EmployeeListParams {
   page?: number;
-  limit?: number;
+  size?: number;
   keyword?: string;
   status?: 'Allocated' | 'Available' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated';
-  skillIds?: number[] | string[];
-  teamId?: number | string;
+  skillIds?: number[];
+  teamId?: number;
   position?: string;
   minExperience?: number;
   sortBy?: string;
@@ -35,14 +35,18 @@ export interface PageableResponse {
   totalPages: number;
   totalElements: number;
   sort: string;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 /**
  * Paginated employee response
  */
 export interface PaginatedEmployeeResponse {
+  status: string;
+  code: number;
   data: {
-    content: EmployeeResponse[];
+    content: NewEmployeeApiResponse[];
     pageable: PageableResponse;
   };
 }
@@ -191,23 +195,21 @@ export interface EmployeeSuggestionsResponseWrapper {
  */
 export interface EmployeeCreateData {
   employeeCode: string;
-  name: string;
-  email: string;
-  position: string;
-  teamId: number | string;
-  phone?: string;
-  address?: string;
-  birthDate?: string;
-  joinDate: string;
-  emergencyContact?: {
-    name: string;
-    phone: string;
-    relation?: string;
-  };
-  status: 'Allocated' | 'Available' | 'EndingSoon' | 'OnLeave' | 'Resigned' | 'PartiallyAllocated';
-  avatar?: string;
+  firstName: string;
+  lastName: string;
+  companyEmail: string;
+  position: string | null;
+  teamId?: number;
+  phoneNumber?: string | null;
+  address?: string | null;
+  birthDate?: string | null;
+  hireDate?: string | null;
+  emergencyContact?: string | null;
+  currentStatus: string | null;
+  profilePictureUrl?: string | null;
   userId?: number | null;
-  note?: string;
+  internalAccount?: string | null;
+  reportingLeaderId?: number | null;
 }
 
 /**
@@ -240,6 +242,23 @@ export interface EmployeeStatusUpdateData {
 }
 
 /**
+ * Data structure for updating employee status and creating a status log,
+ * matching POST /employee-status-logs/employees/{employeeId}/status
+ * and also PUT /employees/{id}/status from hrm-api.yaml
+ */
+export interface StatusUpdateRequest {
+  status: string; // e.g., 'Available', 'Allocated', 'On Leave', 'Resigned'
+  projectName?: string | null;
+  clientName?: string | null;
+  startDate?: string | null; // Format: date (YYYY-MM-DD) - For project allocation or leave
+  expectedEndDate?: string | null; // Format: date (YYYY-MM-DD) - For project allocation, leave, or resignation
+  allocationPercentage?: number | null; // 0-100 for project allocation
+  isBillable?: boolean | null; // For project allocation
+  contractId?: number | null;
+  note?: string | null;
+}
+
+/**
  * Response for employee import operation
  */
 export interface ImportEmployeesResponse {
@@ -265,18 +284,20 @@ export interface ImportEmployeesResponse {
 }
 
 /**
- * Employee project history data
+ * Employee project history data - should align with ProjectHistoryDto from API
  */
 export interface EmployeeProjectHistoryResponse {
   id: number;
-  projectId: number;
+  employeeId?: number;
+  employeeName?: string;
   projectName: string;
+  clientName?: string;
+  role?: string;
   startDate: string;
   endDate?: string;
-  role: string;
-  utilization: number; // percentage 0-100
-  performanceRating?: number; // 1-5
-  feedback?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
@@ -467,6 +488,7 @@ export type SkillLevel = 'Basic' | 'Intermediate' | 'Advanced' | 'Expert';
  */
 export interface EmployeeSkillDetail {
   id: number;
+  skillId: number;
   name: string;
   category: {
     id: number;
@@ -480,7 +502,9 @@ export interface EmployeeSkillDetail {
     id: number;
     name: string;
   };
-  lastUpdated: string;
+  lastUpdated?: string;
+  leaderAssessmentLevel?: SkillLevel | null;
+  leaderComment?: string | null;
 }
 
 /**
@@ -525,16 +549,15 @@ export interface EmployeeSkillBrief {
 
 /**
  * Data for creating/updating employee skills based on API-HRM-018
+ * This should align with EmployeeSkillRequest from hrm-api.yaml for self-assessment fields.
  */
 export interface EmployeeSkillCreateData {
-  employeeSkillId?: number;
   skillId: number;
-  level: SkillLevel;
-  years: number;
-  description?: string;
-  certifications?: string[];
-  notes?: string;
-  isVerified?: boolean;
+  selfAssessmentLevel: string | null;
+  yearsExperience: number | null;
+  selfComment?: string | null;
+  leaderAssessmentLevel?: string | null;
+  leaderComment?: string | null;
 }
 
 /**

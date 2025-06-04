@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sdims_frontend_app
+    ports:
+      - "8080:80" # Map host port 8080 to container port 80 (Nginx default)
+    restart: unless-stopped
+    # Optional: Add volumes for development if needed, but typically not for production builds
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules
+
+# Optional: Define networks if you have multiple services (e.g., backend)
+# networks:
+#   app-network:
+#     driver: bridge 

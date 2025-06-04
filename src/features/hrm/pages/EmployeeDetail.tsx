@@ -12,8 +12,9 @@ import { Spinner } from '../../../components/ui/Spinner';
 import { Tabs, TabItem } from '../components';
 import { 
   EmployeeResponse, 
-  EmployeeSkillDetail, 
-  EmployeeProjectHistoryResponse 
+  EmployeeProjectHistoryResponse,
+  NewEmployeeApiResponse,
+  NewEmployeeSkillResponse
 } from '../types';
 import { useEmployeeService, useSkillService } from '../hooks';
 import { ArrowLeft, Edit } from 'react-feather';
@@ -50,8 +51,8 @@ const EmployeeDetail: React.FC = () => {
   const skillService = useSkillService();
   const { user, permissions } = useAuth();
   
-  const [employee, setEmployee] = useState<EmployeeResponse | null>(null);
-  const [skills, setSkills] = useState<EmployeeSkillDetail[]>([]);
+  const [employee, setEmployee] = useState<NewEmployeeApiResponse | null>(null);
+  const [skills, setSkills] = useState<NewEmployeeSkillResponse[]>([]);
   const [projectHistory, setProjectHistory] = useState<EmployeeProjectHistoryResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,13 +165,13 @@ const EmployeeDetail: React.FC = () => {
   
   // Group skills by category
   const skillsByCategory = skills.reduce((acc, skill) => {
-    const category = skill.category.name;
+    const category = skill.skillCategoryName || 'Uncategorized';
     if (!acc[category]) {
       acc[category] = [];
     }
     acc[category].push(skill);
     return acc;
-  }, {} as Record<string, EmployeeSkillDetail[]>);
+  }, {} as Record<string, NewEmployeeSkillResponse[]>);
   
   // Prepare tab content
   const tabs: TabItem[] = [
@@ -186,7 +187,7 @@ const EmployeeDetail: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex border-b border-gray-200 py-3">
                     <div className="w-1/2 text-gray-500">Họ và tên đầy đủ</div>
-                    <div className="w-1/2 font-medium">{employee.name}</div>
+                    <div className="w-1/2 font-medium">{`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}</div>
                   </div>
                   <div className="flex border-b border-gray-200 py-3">
                     <div className="w-1/2 text-gray-500">Ngày sinh</div>
@@ -219,18 +220,13 @@ const EmployeeDetail: React.FC = () => {
                   </div>
                   <div className="flex border-b border-gray-200 py-3">
                     <div className="w-1/2 text-gray-500">Số điện thoại</div>
-                    <div className="w-1/2 font-medium">{employee.phone || 'N/A'}</div>
-                  </div>
-                  <div className="flex border-b border-gray-200 py-3">
-                    <div className="w-1/2 text-gray-500">Người liên hệ khẩn cấp</div>
-                    <div className="w-1/2 font-medium">
-                      {employee.emergencyContact?.name || 'N/A'} 
-                      {employee.emergencyContact?.relation ? ` (${employee.emergencyContact.relation})` : ''}
-                    </div>
+                    <div className="w-1/2 font-medium">{employee.phoneNumber || 'N/A'}</div>
                   </div>
                   <div className="flex py-3">
-                    <div className="w-1/2 text-gray-500">SĐT liên hệ khẩn cấp</div>
-                    <div className="w-1/2 font-medium">{employee.emergencyContact?.phone || 'N/A'}</div>
+                    <div className="w-1/2 text-gray-500">Người liên hệ khẩn cấp</div>
+                    <div className="w-1/2 font-medium">
+                      {employee.emergencyContact || 'N/A'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -288,25 +284,27 @@ const EmployeeDetail: React.FC = () => {
                         {categorySkills.map(skill => (
                           <tr key={skill.id} className="hover:bg-gray-50">
                             <td className="py-4 px-4">
-                              <div className="font-medium text-gray-900">{skill.name}</div>
-                              {skill.description && (
-                                <div className="text-sm text-gray-500 mt-1">{skill.description}</div>
+                              <div className="font-medium text-gray-900">{skill.skillName}</div>
+                              {skill.selfComment && (
+                                <div className="text-sm text-gray-500 mt-1 italic">"{skill.selfComment}"</div>
                               )}
                             </td>
-                            <td className="py-4 px-4 text-center text-gray-700">{skill.years}</td>
+                            <td className="py-4 px-4 text-center text-gray-700">{skill.yearsExperience} năm</td>
                             <td className="py-4 px-4">
                               <div className="flex justify-center">
                                 {Array.from({ length: 5 }).map((_, index) => (
                                   <svg 
                                     key={index} 
-                                    className={`w-5 h-5 ${index < (skill.level === 'Advanced' ? 4 : skill.level === 'Intermediate' ? 3 : 2) ? 'text-yellow-400' : 'text-gray-300'}`} 
+                                    className={`w-5 h-5 ${index < (skill.selfAssessmentLevel === 'Expert' || skill.selfAssessmentLevel === 'Advanced' ? 4 : skill.selfAssessmentLevel === 'Intermediate' ? 3 : 2) ? 'text-yellow-400' : 'text-gray-300'}`} 
                                     fill="currentColor" 
                                     viewBox="0 0 20 20"
                                   >
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                   </svg>
                                 ))}
-                                <span className="ml-1 text-xs text-gray-500">{skill.level === 'Advanced' ? '4/5' : skill.level === 'Intermediate' ? '3/5' : '2/5'}</span>
+                                <span className="ml-1 text-xs text-gray-500">
+                                  {skill.selfAssessmentLevel === 'Expert' || skill.selfAssessmentLevel === 'Advanced' ? '4/5' : skill.selfAssessmentLevel === 'Intermediate' ? '3/5' : '2/5'}
+                                </span>
                               </div>
                             </td>
                             <td className="py-4 px-4">
@@ -314,14 +312,16 @@ const EmployeeDetail: React.FC = () => {
                                 {Array.from({ length: 5 }).map((_, index) => (
                                   <svg 
                                     key={index} 
-                                    className={`w-5 h-5 ${index < (skill.level === 'Advanced' ? 4 : skill.level === 'Intermediate' ? 3 : 2) ? 'text-yellow-400' : 'text-gray-300'}`} 
+                                    className={`w-5 h-5 ${index < (skill.selfAssessmentLevel === 'Expert' || skill.selfAssessmentLevel === 'Advanced' ? 4 : skill.selfAssessmentLevel === 'Intermediate' ? 3 : 2) ? 'text-yellow-400' : 'text-gray-300'}`} 
                                     fill="currentColor" 
                                     viewBox="0 0 20 20"
                                   >
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                   </svg>
                                 ))}
-                                <span className="ml-1 text-xs text-gray-500">{skill.level === 'Advanced' ? '4/5' : skill.level === 'Intermediate' ? '3/5' : '2/5'}</span>
+                                <span className="ml-1 text-xs text-gray-500">
+                                  {skill.selfAssessmentLevel === 'Expert' || skill.selfAssessmentLevel === 'Advanced' ? '4/5' : skill.selfAssessmentLevel === 'Intermediate' ? '3/5' : '2/5'}
+                                </span>
                               </div>
                             </td>
                             <td className="py-4 px-4 text-right">
@@ -449,17 +449,17 @@ const EmployeeDetail: React.FC = () => {
                       <div>
                         <p className="text-sm text-gray-500">Phân bổ</p>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{project.utilization}%</span>
+                          <span className="font-medium">N/A</span>
                           <div className="w-24 bg-gray-200 rounded-full h-1.5">
                             <div 
                               className="bg-blue-600 h-1.5 rounded-full" 
-                              style={{ width: `${project.utilization}%` }}
+                              style={{ width: `0%` }}
                             ></div>
                           </div>
                         </div>
                       </div>
                       
-                      {project.performanceRating && (
+                      {false && (
                         <>
                           <div>
                             <p className="text-sm text-gray-500">Đánh giá</p>
@@ -467,7 +467,7 @@ const EmployeeDetail: React.FC = () => {
                               {Array.from({ length: 5 }).map((_, index) => (
                                 <svg 
                                   key={index} 
-                                  className={`w-4 h-4 ${index < (project.performanceRating || 0) ? 'text-yellow-400' : 'text-gray-300'}`} 
+                                  className={`w-4 h-4 ${index < 0 ? 'text-yellow-400' : 'text-gray-300'}`} 
                                   fill="currentColor" 
                                   viewBox="0 0 20 20"
                                 >
@@ -477,10 +477,10 @@ const EmployeeDetail: React.FC = () => {
                             </div>
                           </div>
                           
-                          {project.feedback && (
+                          {false && (
                             <div>
                               <p className="text-sm text-gray-500">Feedback</p>
-                              <p className="text-sm italic">{project.feedback}</p>
+                              <p className="text-sm italic">N/A</p>
                             </div>
                           )}
                         </>
@@ -537,137 +537,29 @@ const EmployeeDetail: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-700 mb-4">Trạng thái hiện tại</h3>
             <div className="flex flex-col items-center py-6">
               <Badge
-                className={`text-base px-4 py-1.5 ${statusColorMap[employee.status] || 'bg-gray-100 text-gray-800'}`}
+                className={`text-base px-4 py-1.5 ${statusColorMap[employee.currentStatus] || 'bg-gray-100 text-gray-800'}`}
               >
-                {employee.status === 'PartiallyAllocated' ? 'Đang phân bổ một phần' : employee.status}
+                {employee.currentStatus === 'PartiallyAllocated' ? 'Đang phân bổ một phần' : employee.currentStatus}
               </Badge>
               
-              {(employee.status === 'Allocated' || employee.status === 'PartiallyAllocated' || employee.status === 'EndingSoon') && 
-                employee.allocations && employee.allocations.length > 0 && (
+              {(employee.currentStatus === 'Allocated' || employee.currentStatus === 'PartiallyAllocated' || employee.currentStatus === 'EndingSoon') && 
+                projectHistory && projectHistory.length > 0 && (
                 <div className="mt-6 w-full max-w-2xl mx-auto">
-                  <h4 className="font-medium text-gray-900 mb-3 text-center">Phân bổ dự án hiện tại</h4>
-                  
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {employee.allocations.filter(alloc => alloc.status === 'Active').map(allocation => (
-                      <div key={allocation.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-2">
-                          <h5 className="font-semibold text-gray-900">{allocation.project.name}</h5>
-                          <Badge 
-                            className={allocation.allocation >= 90 ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}
-                          >
-                            {allocation.allocation}% phân bổ
-                          </Badge>
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 text-center">Thông tin phân bổ hiện tại</h4>
+                  <div className="space-y-3">
+                    {projectHistory.filter(ph => !ph.endDate || new Date(ph.endDate) >= new Date()).slice(0, 2).map((ph, index) => (
+                      <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <div className="font-medium text-gray-800">{ph.projectName}</div>
+                        <div className="text-sm text-gray-600">Vai trò: {ph.role || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">
+                          Thời gian: {new Date(ph.startDate).toLocaleDateString('vi-VN')} - {ph.endDate ? new Date(ph.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
                         </div>
-                        
-                        <div className="mb-2">
-                          <p className="text-sm text-gray-600">Vai trò: <span className="font-medium">{allocation.position}</span></p>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <div className="text-sm text-gray-600 mb-1">Thời gian tham gia</div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <span>{new Date(allocation.startDate).toLocaleDateString('vi-VN')}</span>
-                            <span>→</span>
-                            <span>{allocation.endDate ? new Date(allocation.endDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}</span>
-                            {allocation.endDate && (
-                              <span className="text-sm text-gray-500">
-                                (còn {Math.ceil((new Date(allocation.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} ngày)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="mb-2">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm text-gray-600">Tỷ lệ phân bổ</span>
-                            <span className="text-sm font-medium">{allocation.allocation}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div 
-                              className={`h-1.5 rounded-full ${allocation.allocation >= 90 ? 'bg-blue-600' : 'bg-purple-600'}`}
-                              style={{ width: `${allocation.allocation}%` }}
-                            ></div>
-                          </div>
-                        </div>
+                        {false && (
+                           <div className="text-sm text-gray-500">Phân bổ: N/A</div>
+                        )}
                       </div>
                     ))}
                   </div>
-                  
-                  {/* Hiển thị tổng phân bổ */}
-                  {(contractAllocations || employee.allocations)?.filter((a: any) => a.status === 'Active').length > 0 && (
-                    <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium">Tổng phân bổ hiện tại:</span>
-                        <span className="font-bold text-lg">
-                          {(contractAllocations || employee.allocations)
-                            ?.filter((a: any) => a.status === 'Active')
-                            .reduce((sum: number, curr: any) => sum + curr.allocation, 0)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div 
-                          className="h-3 rounded-full bg-green-600" 
-                          style={{ 
-                            width: `${Math.min(
-                              (contractAllocations || employee.allocations)
-                                ?.filter((a: any) => a.status === 'Active')
-                                .reduce((sum: number, curr: any) => sum + curr.allocation, 0), 
-                              100
-                            )}%` 
-                          }}
-                        ></div>
-                      </div>
-                      {(contractAllocations || employee.allocations)
-                        ?.filter((a: any) => a.status === 'Active')
-                        .reduce((sum: number, curr: any) => sum + curr.allocation, 0) > 100 && (
-                        <p className="text-sm text-red-600 mt-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="inline h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                          Tổng phân bổ vượt quá 100%. Nhân viên đang được phân bổ quá tải.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  
-                  {employee.allocations.some(alloc => alloc.status === 'Upcoming') && (
-                    <div className="mt-6">
-                      <h4 className="font-medium text-gray-700 mb-2 text-center">Dự án sắp tới</h4>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {employee.allocations.filter(alloc => alloc.status === 'Upcoming').map(allocation => (
-                          <div key={allocation.id} className="p-4 border border-blue-100 bg-blue-50 rounded-lg">
-                            <div className="flex justify-between items-start mb-2">
-                              <h5 className="font-semibold text-gray-900">{allocation.project.name}</h5>
-                              <Badge className="bg-blue-100 text-blue-800">Sắp tới</Badge>
-                            </div>
-                            
-                            <div className="mb-2">
-                              <p className="text-sm text-gray-600">Vai trò: <span className="font-medium">{allocation.position}</span></p>
-                            </div>
-                            
-                            <div className="mb-2">
-                              <div className="text-sm text-gray-600 mb-1">Thời gian dự kiến</div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <span>{new Date(allocation.startDate).toLocaleDateString('vi-VN')}</span>
-                                <span>→</span>
-                                <span>{allocation.endDate ? new Date(allocation.endDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}</span>
-                                {allocation.startDate && (
-                                  <span className="text-sm text-indigo-600 font-medium">
-                                    (còn {Math.ceil((new Date(allocation.startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} ngày nữa)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-sm text-gray-600">Tỷ lệ phân bổ dự kiến</span>
-                              <span className="text-sm font-medium">{allocation.allocation}%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
               
@@ -681,6 +573,45 @@ const EmployeeDetail: React.FC = () => {
               </PermissionGuard>
             </div>
           </div>
+        </div>
+      )
+    },
+    {
+      id: 'work-history',
+      label: 'Lịch sử công việc',
+      content: (
+        <div className="py-6">
+          {projectHistory.length > 0 ? (
+            <div className="space-y-6">
+              {projectHistory.map((historyItem) => (
+                <div key={historyItem.id} className="bg-white p-4 shadow rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-lg font-semibold text-blue-600">{historyItem.projectName}</h4>
+                      <p className="text-sm text-gray-500">Khách hàng: {historyItem.clientName || 'N/A'}</p>
+                    </div>
+                    <Badge color="primary" className="text-xs">
+                      {new Date(historyItem.startDate).toLocaleDateString('vi-VN')} -
+                      {historyItem.endDate ? new Date(historyItem.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-sm"><span className="font-medium text-gray-600">Vai trò:</span> {historyItem.role || 'N/A'}</p>
+                    {false && (
+                      <p className="text-sm"><span className="font-medium text-gray-600">Mức độ tham gia:</span> N/A</p>
+                    )}
+                    {historyItem.description && <p className="text-sm mt-1"><span className="font-medium text-gray-600">Mô tả:</span> {historyItem.description}</p>}
+                    {false && (
+                       <p className="text-sm"><span className="font-medium text-gray-600">Đánh giá:</span> N/A</p>
+                    )}
+                    {false && <p className="text-sm mt-1"><span className="font-medium text-gray-600">Feedback:</span> N/A</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">Chưa có lịch sử công việc.</p>
+          )}
         </div>
       )
     }
@@ -730,19 +661,19 @@ const EmployeeDetail: React.FC = () => {
             {/* Avatar section */}
             <div className="flex flex-col items-center">
               <div className="w-32 h-32 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-5xl font-bold">
-                {employee.name?.charAt(0)}
+                {(employee.firstName || '?').charAt(0)}
               </div>
               <div className="text-sm text-gray-500 text-center mt-2">Mã NV: {employee.employeeCode}</div>
               <div className="mt-2">
-                <Badge className={`${statusColorMap[employee.status] || 'bg-gray-100 text-gray-800'}`}>
-                  {employee.status}
+                <Badge className={`${statusColorMap[employee.currentStatus] || 'bg-gray-100 text-gray-800'}`}>
+                  {employee.currentStatus} 
                 </Badge>
               </div>
             </div>
             
             {/* Name and info */}
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}</h1>
               
               {/* Information grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6 mt-4">
@@ -763,17 +694,17 @@ const EmployeeDetail: React.FC = () => {
                 
                 <div>
                   <div className="text-gray-500 text-sm">Email công ty</div>
-                  <div className="font-medium mt-1">{employee.email}</div>
+                  <div className="font-medium mt-1">{employee.companyEmail}</div>
                 </div>
                 
                 <div>
                   <div className="text-gray-500 text-sm">Ngày vào công ty</div>
-                  <div className="font-medium mt-1">{employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
+                  <div className="font-medium mt-1">{employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
                 </div>
                 
                 <div>
                   <div className="text-gray-500 text-sm">Số điện thoại</div>
-                  <div className="font-medium mt-1">{employee.phone}</div>
+                  <div className="font-medium mt-1">{employee.phoneNumber || 'N/A'}</div>
                 </div>
               </div>
             </div>

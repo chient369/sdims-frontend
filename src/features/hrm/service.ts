@@ -18,6 +18,9 @@ import {
   EmployeeDeleteResponse,
   EmployeeSuggestionsResponseWrapper,
   PaginatedEmployeeResponse,
+  NewEmployeeApiResponse,
+  NewEmployeeSkillResponse,
+  NewPaginatedEmployeeSkillsResponse,
   
   // Skill Types
   SkillCategoryResponse,
@@ -97,21 +100,21 @@ class EmployeeService extends BaseApiService {
   /**
    * Get employee by ID
    */
-  async getEmployeeById(id: string): Promise<EmployeeResponse> {
+  async getEmployeeById(id: string): Promise<NewEmployeeApiResponse> {
     return getEmployeeByIdApi(id);
   }
 
   /**
    * Create a new employee
    */
-  async createEmployee(data: EmployeeCreateData): Promise<EmployeeResponse> {
+  async createEmployee(data: EmployeeCreateData): Promise<NewEmployeeApiResponse> {
     return createEmployeeApi(data);
   }
 
   /**
    * Update an employee
    */
-  async updateEmployee(id: string, data: EmployeeUpdateData): Promise<EmployeeResponse> {
+  async updateEmployee(id: string, data: EmployeeUpdateData): Promise<NewEmployeeApiResponse> {
     return updateEmployeeApi(id, data);
   }
 
@@ -201,8 +204,8 @@ class EmployeeService extends BaseApiService {
    * This is a business logic method that combines multiple API calls
    */
   async getEmployeeDetails(employeeId: string): Promise<{
-    employee: EmployeeResponse;
-    skills: EmployeeSkillDetail[];
+    employee: NewEmployeeApiResponse;
+    skills: NewEmployeeSkillResponse[];
     projectHistory: EmployeeProjectHistoryResponse[];
   }> {
     // Tạo instance SkillService để sử dụng
@@ -337,41 +340,74 @@ class SkillService extends BaseApiService {
   async getEmployeeSkills(
     employeeId: string,
     params?: Omit<EmployeeSkillsParams, 'employeeId'>
-  ): Promise<EmployeeSkillDetail[]> {
+  ): Promise<NewEmployeeSkillResponse[]> {
     try {
-      const response = await getEmployeeSkillsApi(employeeId, params);
+      // const apiResponse = await getEmployeeSkillsApi(employeeId, params);
+      // console.log('[SkillService.getEmployeeSkills] apiResponse from getEmployeeSkillsApi:', apiResponse); 
       
-      // Kiểm tra nếu response là kiểu mới
-      if ('content' in response) {
-        // Chuyển đổi từ kiểu mới sang kiểu cũ
-        const convertedSkills: EmployeeSkillDetail[] = response.content.map(skill => ({
-          id: skill.skillId,
-          name: skill.skillName,
-          category: {
-            id: 0, // Không có id trong API mới, gán giá trị mặc định
-            name: skill.skillCategoryName
-          },
-          level: this.convertSkillLevel(skill.selfAssessmentLevel),
-          years: skill.yearsExperience,
-          description: skill.selfComment || undefined,
-          isVerified: !!skill.leaderAssessmentLevel,
-          lastUpdated: skill.updatedAt
-        }));
+      // Debugging: Log what the promise from getEmployeeSkillsApi resolves to
+      return getEmployeeSkillsApi(employeeId, params).then(dataFromApi => {
+        console.log('[SkillService.getEmployeeSkills] Data directly from getEmployeeSkillsApi.then():', dataFromApi);
         
-        return convertedSkills;
+        // Re-implement the logic based on dataFromApi
+        if (Array.isArray(dataFromApi)) {
+          if (dataFromApi.length > 0) {
+            const firstItem = dataFromApi[0];
+            if (typeof firstItem === 'object' && firstItem !== null && 'skillId' in firstItem && 'skillName' in firstItem) {
+              return dataFromApi as NewEmployeeSkillResponse[];
+            }
+            console.error('[SkillService.getEmployeeSkills] API returned an array, but items do not match NewEmployeeSkillResponse structure:', dataFromApi);
+            return []; 
+          }
+          return []; 
+        }
+
+        if (dataFromApi && typeof dataFromApi === 'object' && 'content' in dataFromApi && Array.isArray((dataFromApi as any).content)) {
+          const paginatedResponse = dataFromApi as NewPaginatedEmployeeSkillsResponse;
+          return paginatedResponse.content;
+        }
+        
+        // Older structure handling (EmployeeSkillsResponse)
+        // This part might need adjustment if EmployeeSkillDetail type is removed or significantly changed.
+        // For now, keeping the mapping logic if this path is still potentially active.
+        if (dataFromApi && typeof dataFromApi === 'object' && 'skills' in dataFromApi && Array.isArray((dataFromApi as any).skills)) {
+          console.warn('[SkillService.getEmployeeSkills] API returned an older (EmployeeSkillsResponse). Mapping to NewEmployeeSkillResponse.');
+          // Cast to any first to resolve linter warning for this fallback case
+          const oldResponse = dataFromApi as any as EmployeeSkillsResponse; 
+          if (Array.isArray(oldResponse.skills)) {
+            return oldResponse.skills.map((oldSkillDetail: EmployeeSkillDetail) => ({
+              id: oldSkillDetail.id,
+              employeeId: parseInt(employeeId),
+              employeeName: null, 
+              skillId: oldSkillDetail.skillId,
+              skillName: typeof oldSkillDetail.name === 'string' ? oldSkillDetail.name : 'Unknown Skill',
+              skillCategoryName: (oldSkillDetail.category && typeof oldSkillDetail.category.name === 'string') ? oldSkillDetail.category.name : 'Unknown Category',
+              yearsExperience: typeof oldSkillDetail.years === 'number' ? oldSkillDetail.years : 0,
+              selfAssessmentLevel: (typeof oldSkillDetail.level === 'string' ? oldSkillDetail.level : 'Basic') as SkillLevel,
+              leaderAssessmentLevel: oldSkillDetail.leaderAssessmentLevel as SkillLevel | null,
+              selfComment: (typeof oldSkillDetail.description === 'string' ? oldSkillDetail.description : null),
+              leaderComment: oldSkillDetail.leaderComment || null,
+              createdAt: oldSkillDetail.lastUpdated || new Date().toISOString(), 
+              updatedAt: oldSkillDetail.lastUpdated || new Date().toISOString(), 
+            }));
+          }
+          console.error('Older EmployeeSkillsResponse.skills is not an array:', oldResponse);
+          return [];
       }
       
-      // Kiểu cũ
-      if ('skills' in response) {
-        return response.skills;
-      }
-      
-      // Nếu không khớp với bất kỳ định dạng nào
-      console.error('Unknown response format from getEmployeeSkills API', response);
+        console.error('[SkillService.getEmployeeSkills] Unknown or empty response format from dataFromApi:', dataFromApi);
       return [];
+      }).catch(err => {
+        console.error('[SkillService.getEmployeeSkills] Error from getEmployeeSkillsApi.catch():', err);
+        throw err; // Re-throw to be caught by useQuery
+      });
+
     } catch (error) {
-      console.error('Error in getEmployeeSkills:', error);
-      return [];
+      console.error('Error in SkillService.getEmployeeSkills:', error);
+      // It's often better to re-throw the error or throw a new custom error
+      // so that the calling code (useQuery) can handle the error state.
+      // Returning [] might mask the error from useQuery's error state.
+      throw error; 
     }
   }
 
